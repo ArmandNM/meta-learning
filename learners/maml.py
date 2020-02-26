@@ -79,26 +79,3 @@ class MAML:
 
     def eval(self):
         pass
-
-
-def main():
-    dataset = miniimagenet('../datasets', ways=5, shots=1, test_shots=15, meta_train=True, download=True)
-    dataloader = BatchMetaDataLoader(dataset, batch_size=5, num_workers=1)
-    model = MetaConv()
-    model.cuda()
-    optimizer = torch.optim.Adam(model.parameters())
-
-    maml = MAML(dataloader=dataloader,
-                model=model,
-                optimizer=optimizer,
-                meta_batch_size=5,
-                ways=5,
-                shots=1,
-                test_shots=15,
-                inner_steps=5)
-
-    maml.train()
-
-
-if __name__ == '__main__':
-    main()

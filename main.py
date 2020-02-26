@@ -8,6 +8,7 @@ from torchmeta.utils.data import BatchMetaDataLoader
 from time import time
 
 from models.MetaConv import MetaConv
+from learners.maml import MAML
 
 
 def mock_train(train_inputs, train_labels):
@@ -25,7 +26,7 @@ def mock_train(train_inputs, train_labels):
 
     print_step = 50
 
-    for i in range(1000):
+    for i in range(100):
         optimizer.zero_grad()
 
         outputs = model(train_inputs)
@@ -42,12 +43,31 @@ def mock_train(train_inputs, train_labels):
 
         if i % print_step == 0:
             end = time()
-            print(f'Iteration {i} loss: {running_loss / 1000 :.10f} '
-                  f'accuracy: {100 * accuracy}% '
+            print(f'Iteration {i} loss: {running_loss / print_step :.10f} '
+                  f'accuracy: {100 * running_accuracy / print_step}% '
                   f'speed: {print_step / (end - start) :.2f} iter/s')
             running_loss = 0.0
             running_accuracy = 0.0
             start = time()
+
+
+def mock_train_maml():
+    dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_train=True, download=True)
+    dataloader = BatchMetaDataLoader(dataset, batch_size=5, num_workers=1)
+    model = MetaConv()
+    model.cuda()
+    optimizer = torch.optim.Adam(model.parameters())
+
+    maml = MAML(dataloader=dataloader,
+                model=model,
+                optimizer=optimizer,
+                meta_batch_size=5,
+                ways=5,
+                shots=1,
+                test_shots=15,
+                inner_steps=5)
+
+    maml.train()
 
 
 def main():
@@ -69,6 +89,8 @@ def main():
         mock_train(train_inputs[0], train_labels[0])
 
         break
+
+    mock_train_maml()
 
 
 if __name__ == '__main__':
