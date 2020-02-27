@@ -8,7 +8,7 @@ def conv_block(in_channels, out_channels):
                                                 padding=1),
                                 torch.nn.BatchNorm2d(num_features=out_channels,
                                                      momentum=1.0,
-                                                     track_running_stats=True),
+                                                     track_running_stats=False),
                                 torch.nn.ReLU(),
                                 torch.nn.MaxPool2d(2))
     return block

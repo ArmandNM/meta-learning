@@ -7,7 +7,7 @@ from torchmeta.utils.data import BatchMetaDataLoader
 
 from time import time
 
-from models.MetaConv import MetaConv
+from models.metaconv import MetaConv
 from learners.maml import MAML
 
 
@@ -52,22 +52,28 @@ def mock_train(train_inputs, train_labels):
 
 
 def mock_train_maml():
-    dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_train=True, download=True)
-    dataloader = BatchMetaDataLoader(dataset, batch_size=5, num_workers=1)
+    train_dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_train=True, download=True)
+    train_dataloader = BatchMetaDataLoader(train_dataset, batch_size=5, num_workers=4)
+
+    val_dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_val=True, download=True)
+    val_dataloader = BatchMetaDataLoader(val_dataset, batch_size=5, num_workers=4)
+
     model = MetaConv()
     model.cuda()
     optimizer = torch.optim.Adam(model.parameters())
 
-    maml = MAML(dataloader=dataloader,
+    maml = MAML(train_dataloader=train_dataloader,
+                val_dataloader=val_dataloader,
                 model=model,
                 optimizer=optimizer,
                 meta_batch_size=5,
                 ways=5,
                 shots=1,
                 test_shots=15,
-                inner_steps=5)
+                inner_steps=5,
+                outer_steps=60000)
 
-    maml.train()
+    maml.train(training=True)
 
 
 def main():
