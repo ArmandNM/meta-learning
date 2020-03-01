@@ -1,5 +1,6 @@
 import torch
 import higher
+import os
 
 from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
@@ -10,21 +11,27 @@ from time import time
 
 class MAML:
     def __init__(self, train_dataloader, val_dataloader, model: torch.nn.Module, optimizer: Optimizer,
-                 meta_batch_size, ways, shots, test_shots, inner_steps, outer_steps):
+                 meta_batch_size, ways, shots, test_shots, inner_steps, outer_steps,
+                 experiment_name):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
         self.model = model
-        self.optimizer= optimizer
+        self.optimizer = optimizer
         self.meta_batch_size = meta_batch_size
         self.n_way = ways
         self.k_spt = shots
         self.k_qry = test_shots
         self.inner_steps = inner_steps
         self.outer_steps = outer_steps
+        self.experiment_name = experiment_name
 
-    def train(self, training=False, validation=False, testing=False):
-        # Check that exactly one of trainig/validating/testing parameters is set to True
+        self.best_model = None
+
+    def train(self, training=False, validation=False, testing=False, resume=False):
+        # Check that exactly one of training/validating/testing parameters is set to True
         assert int(training) + int(validation) + int(testing) == 1
+        # Check that resume is True only if training in True
+        assert int(training) ^ int(resume) == 0 or resume is False
 
         # Select dataset split
         if training:
@@ -38,6 +45,7 @@ class MAML:
         running_accuracy = 0.0
         train_print_step = 5
         val_print_step = 30
+        checkpoint_step = 50
         start = time()
 
         for it, meta_batch in enumerate(dataloader):
@@ -46,6 +54,10 @@ class MAML:
                 break
             if not training and it > val_print_step:
                 break
+
+            # Load immediately after saving model only for developing purposes
+            if training and it > 0 and (it - 1) % checkpoint_step == 0:
+                self.load_checkpoint(checkpoint_name=f'checkpoint_{it - 1}')
 
             meta_train_inputs, meta_train_labels = meta_batch["train"]
             meta_test_inputs, meta_test_labels = meta_batch["test"]
@@ -107,7 +119,7 @@ class MAML:
                     print_step = train_print_step
                     phase = '[TRAIN]'
                 if validation:
-                    print_step = val_print_step
+                    print_step = val_print_step + 1
                     phase = '[VAL]'
 
                 print(f'{phase} Iteration {it} loss: {running_loss / (self.meta_batch_size * print_step) :.5f} '
@@ -115,6 +127,10 @@ class MAML:
                       f'speed: {print_step / (end - start) :.2f} iter/s')
 
                 # [TODO] Save best model based on val accuracy
+                if validation and (self.best_model is None or
+                                   100 * running_accuracy / (self.meta_batch_size * print_step) > self.best_model):
+                    self.best_model = 100 * running_accuracy / (self.meta_batch_size * print_step)
+                    self.save_checkpoint(it=it, checkpoint_name='best_checkpoint')
 
                 running_loss = 0.0
                 running_accuracy = 0.0
@@ -122,12 +138,32 @@ class MAML:
                 start = time()
 
             # Run validation to select the best model
-            if training and it > int(0.00005 * self.outer_steps) and it % val_print_step == 0:
+            if training and it > int(0.0000005 * self.outer_steps) and it % val_print_step == 0:
                 self.model.eval()
                 self.eval()
                 # Model must be set back to training mode after an evaluation
                 self.model.train()
                 start = time()
 
+            # Save checkpoint of model and optimizer
+            if training and it % checkpoint_step == 0:
+                self.save_checkpoint(it=it, checkpoint_name=f'checkpoint_{it}')
+
     def eval(self):
         self.train(validation=True)
+
+    def save_checkpoint(self, it, checkpoint_name):
+        if not os.path.isdir(f'experiments/{self.experiment_name}'):
+            os.makedirs(f'experiments/{self.experiment_name}')
+        print(f'Saving {checkpoint_name} ...')
+        torch.save({
+            'iteration': it,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict()
+        }, f'experiments/{self.experiment_name}/{checkpoint_name}')
+
+    def load_checkpoint(self, checkpoint_name):
+        print(f'Loading {checkpoint_name} ...')
+        checkpoint = torch.load(f'experiments/{self.experiment_name}/{checkpoint_name}')
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

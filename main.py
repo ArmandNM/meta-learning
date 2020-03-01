@@ -6,6 +6,7 @@ from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
 
 from time import time
+from datetime import datetime
 
 from models.metaconv import MetaConv
 from learners.maml import MAML
@@ -62,6 +63,7 @@ def mock_train_maml():
     model.cuda()
     optimizer = torch.optim.Adam(model.parameters())
 
+    now = datetime.now()
     maml = MAML(train_dataloader=train_dataloader,
                 val_dataloader=val_dataloader,
                 model=model,
@@ -71,7 +73,8 @@ def mock_train_maml():
                 shots=1,
                 test_shots=15,
                 inner_steps=5,
-                outer_steps=60000)
+                outer_steps=60000,
+                experiment_name=f'maml__{now.strftime("%d_%B_%Y__%H_%M_%S")}')
 
     maml.train(training=True)
 
