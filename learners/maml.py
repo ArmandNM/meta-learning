@@ -10,11 +10,12 @@ from time import time
 
 
 class MAML:
-    def __init__(self, train_dataloader, val_dataloader, model: torch.nn.Module, optimizer: Optimizer,
+    def __init__(self, train_dataloader, val_dataloader, test_dataloader, model: torch.nn.Module, optimizer: Optimizer,
                  meta_batch_size, ways, shots, test_shots, inner_steps, outer_steps,
                  experiment_name):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
+        self.test_dataloader = test_dataloader
         self.model = model
         self.optimizer = optimizer
         self.meta_batch_size = meta_batch_size
@@ -27,11 +28,11 @@ class MAML:
 
         self.best_model = None
 
-    def train(self, training=False, validation=False, testing=False, resume=False):
+    def train(self, training=False, validation=False, testing=False, resume=False, train_iter=None):
         # Check that exactly one of training/validating/testing parameters is set to True
         assert int(training) + int(validation) + int(testing) == 1
-        # Check that resume is True only if training in True
-        assert int(training) ^ int(resume) == 0 or resume is False
+        # Check that resume is True only if training/testing in True
+        # assert int(training) ^ int(resume) == 0 or resume is False
 
         # Select dataset split
         if training:
@@ -40,19 +41,29 @@ class MAML:
         if validation:
             self.model.eval()
             dataloader = self.val_dataloader
+        if testing:
+            if resume:
+                self.load_checkpoint(checkpoint_name='best_checkpoint')
+            self.model.eval()
+            dataloader = self.test_dataloader
 
         running_loss = 0.0
         running_accuracy = 0.0
-        train_print_step = 5
-        val_print_step = 30
-        checkpoint_step = 50
+        train_print_step = 10
+        val_print_step = 50
+        test_num_iters = 50
+        if resume:
+            test_num_iters = 1000
+        checkpoint_step = 500
         start = time()
 
         for it, meta_batch in enumerate(dataloader):
             # Stop conditions
             if training and it > self.outer_steps:
                 break
-            if not training and it > val_print_step:
+            if validation and it > val_print_step:
+                break
+            if testing and it > test_num_iters:
                 break
 
             # Load immediately after saving model only for developing purposes
@@ -112,7 +123,8 @@ class MAML:
                 self.optimizer.step()
 
             # Print intermediate results for training or val/test results
-            if (training and it % train_print_step == 0) or (not training and it == val_print_step):
+            if (training and it % train_print_step == 0) or (validation and it == val_print_step)\
+                    or (testing and it == test_num_iters):
                 end = time()
 
                 if training:
@@ -121,6 +133,9 @@ class MAML:
                 if validation:
                     print_step = val_print_step + 1
                     phase = '[VAL]'
+                if testing:
+                    print_step = test_num_iters + 1
+                    phase = '[TEST]'
 
                 print(f'{phase} Iteration {it} loss: {running_loss / (self.meta_batch_size * print_step) :.5f} '
                       f'accuracy: {100 * running_accuracy / (self.meta_batch_size * print_step) :.2f}% '
@@ -130,7 +145,7 @@ class MAML:
                 if validation and (self.best_model is None or
                                    100 * running_accuracy / (self.meta_batch_size * print_step) > self.best_model):
                     self.best_model = 100 * running_accuracy / (self.meta_batch_size * print_step)
-                    self.save_checkpoint(it=it, checkpoint_name='best_checkpoint')
+                    self.save_checkpoint(it=train_iter, checkpoint_name='best_checkpoint')
 
                 running_loss = 0.0
                 running_accuracy = 0.0
@@ -140,7 +155,8 @@ class MAML:
             # Run validation to select the best model
             if training and it > int(0.0000005 * self.outer_steps) and it % val_print_step == 0:
                 self.model.eval()
-                self.eval()
+                self.eval(train_iter=it)
+                self.test(resume=False)
                 # Model must be set back to training mode after an evaluation
                 self.model.train()
                 start = time()
@@ -149,8 +165,11 @@ class MAML:
             if training and it % checkpoint_step == 0:
                 self.save_checkpoint(it=it, checkpoint_name=f'checkpoint_{it}')
 
-    def eval(self):
-        self.train(validation=True)
+    def eval(self, train_iter=None):
+        self.train(validation=True, train_iter=train_iter)
+
+    def test(self, resume):
+        self.train(testing=True, resume=resume)
 
     def save_checkpoint(self, it, checkpoint_name):
         if not os.path.isdir(f'experiments/{self.experiment_name}'):
@@ -163,7 +182,7 @@ class MAML:
         }, f'experiments/{self.experiment_name}/{checkpoint_name}')
 
     def load_checkpoint(self, checkpoint_name):
-        print(f'Loading {checkpoint_name} ...')
         checkpoint = torch.load(f'experiments/{self.experiment_name}/{checkpoint_name}')
+        print(f'Loading {checkpoint_name} from iteration {checkpoint["iteration"]} ...')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
