@@ -76,7 +76,8 @@ def mock_train_maml():
                 ways=5,
                 shots=1,
                 test_shots=15,
-                inner_steps=5,
+                inner_steps_train=5,
+                inner_steps_test=10,
                 outer_steps=60000,
                 experiment_name=f'maml__{now.strftime("%d_%B_%Y__%H_%M_%S")}')
 

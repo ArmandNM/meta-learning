@@ -11,7 +11,7 @@ from time import time
 
 class MAML:
     def __init__(self, train_dataloader, val_dataloader, test_dataloader, model: torch.nn.Module, optimizer: Optimizer,
-                 meta_batch_size, ways, shots, test_shots, inner_steps, outer_steps,
+                 meta_batch_size, ways, shots, test_shots, inner_steps_train, inner_steps_test, outer_steps,
                  experiment_name):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
@@ -22,7 +22,8 @@ class MAML:
         self.n_way = ways
         self.k_spt = shots
         self.k_qry = test_shots
-        self.inner_steps = inner_steps
+        self.inner_steps_train = inner_steps_train
+        self.inner_steps_test = inner_steps_test
         self.outer_steps = outer_steps
         self.experiment_name = experiment_name
 
@@ -38,14 +39,17 @@ class MAML:
         if training:
             self.model.train()
             dataloader = self.train_dataloader
+            inner_steps = self.inner_steps_train
         if validation:
             self.model.eval()
             dataloader = self.val_dataloader
+            inner_steps = self.inner_steps_test
         if testing:
             if resume:
                 self.load_checkpoint(checkpoint_name='best_checkpoint')
             self.model.eval()
             dataloader = self.test_dataloader
+            inner_steps = self.inner_steps_test
 
         running_loss = 0.0
         running_accuracy = 0.0
@@ -93,7 +97,7 @@ class MAML:
                     test_labels = meta_test_labels[task_idx].cuda()
 
                     # Inner loop
-                    for _ in range(self.inner_steps):
+                    for _ in range(inner_steps):
                         train_logits = fmodel(train_inputs)
                         train_loss = torch.nn.functional.cross_entropy(train_logits, train_labels)
 
