@@ -8,6 +8,7 @@ from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
 
 from time import time
+from datetime import datetime
 
 
 class MetaTrainer:
@@ -20,7 +21,7 @@ class MetaTrainer:
         self.argparser.add_argument('--tasks_num', type=int, help='meta batch size', default=5)
         self.argparser.add_argument('--meta_learner', type=str, help='name of meta learning method', default='maml')
         self.argparser.add_argument('--meta_optimizer', type=str, help='meta optimizer', default='adam')
-        self.argparser.add_argument('--meta_iters', type=int, help='num of meta iterations', default=150)
+        self.argparser.add_argument('--meta_iters', type=int, help='num of meta iterations', default=60000)
         self.argparser.add_argument('--meta_lr', type=float, help='meta learning rate', default=1e-3)
         self.argparser.add_argument('--dataset', type=str, help='meta dataset to use', default='miniimagenet')
         self.argparser.add_argument('--experiment_name', type=str, help='name of current experiment', default='maml')
@@ -203,6 +204,8 @@ class MetaTrainer:
 
 
 if __name__ == '__main__':
+    # Setting benchmark = True should improve performance for constant shape input
+    torch.backends.cudnn.benchmark = True
     meta_trainer = MetaTrainer()
     meta_trainer.train(training=True)
     meta_trainer.test(resume=True)

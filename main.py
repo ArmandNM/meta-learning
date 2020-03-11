@@ -9,7 +9,7 @@ from time import time
 from datetime import datetime
 
 from models.metaconv import MetaConv
-from learners.maml import MAML
+from learners.meta_trainer import MetaTrainer
 
 
 def mock_train(train_inputs, train_labels):
@@ -53,37 +53,13 @@ def mock_train(train_inputs, train_labels):
 
 
 def mock_train_maml():
-    train_dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_train=True, download=True)
-    train_dataloader = BatchMetaDataLoader(train_dataset, batch_size=5, num_workers=4)
+    # Setting benchmark = True should improve performance for constant shape input
+    torch.backends.cudnn.benchmark = True
 
-    val_dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_val=True, download=True)
-    val_dataloader = BatchMetaDataLoader(val_dataset, batch_size=5, num_workers=4)
-
-    test_dataset = miniimagenet('datasets', ways=5, shots=1, test_shots=15, meta_test=True, download=True)
-    test_dataloader = BatchMetaDataLoader(test_dataset, batch_size=5, num_workers=4)
-
-    model = MetaConv()
-    model.cuda()
-    optimizer = torch.optim.Adam(model.parameters())
-
-    now = datetime.now()
-    maml = MAML(train_dataloader=train_dataloader,
-                val_dataloader=val_dataloader,
-                test_dataloader=test_dataloader,
-                model=model,
-                optimizer=optimizer,
-                meta_batch_size=5,
-                ways=5,
-                shots=1,
-                test_shots=15,
-                inner_steps_train=5,
-                inner_steps_test=10,
-                outer_steps=60000,
-                experiment_name=f'maml__{now.strftime("%d_%B_%Y__%H_%M_%S")}')
-
-    maml.train(training=True)
+    meta_trainer = MetaTrainer()
+    meta_trainer.train(training=True)
     # Test using best checkpoint saved
-    maml.test(resume=True)
+    meta_trainer.test(resume=True)
 
 
 def main():
