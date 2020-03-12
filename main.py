@@ -6,7 +6,6 @@ from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
 
 from time import time
-from datetime import datetime
 
 from models.metaconv import MetaConv
 from learners.meta_trainer import MetaTrainer

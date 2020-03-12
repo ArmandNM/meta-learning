@@ -8,7 +8,6 @@ from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
 
 from time import time
-from datetime import datetime
 
 
 class MetaTrainer:
@@ -64,11 +63,11 @@ class MetaTrainer:
         self.train_dataloader = BatchMetaDataLoader(train_dataset, batch_size=self.args.tasks_num, num_workers=4)
 
         val_dataset = dataset('datasets', ways=self.args.n_ways, shots=self.args.k_spt, test_shots=self.args.k_qry,
-                              meta_train=True, download=True)
+                              meta_val=True, download=True)
         self.val_dataloader = BatchMetaDataLoader(val_dataset, batch_size=self.args.tasks_num, num_workers=4)
 
         test_dataset = dataset('datasets', ways=self.args.n_ways, shots=self.args.k_spt, test_shots=self.args.k_qry,
-                               meta_train=True, download=True)
+                               meta_test=True, download=True)
         self.test_dataloader = BatchMetaDataLoader(test_dataset, batch_size=self.args.tasks_num, num_workers=4)
 
         # Create meta-learner object

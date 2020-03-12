@@ -12,6 +12,7 @@ CURRENT_DATE=$(date '+%d_%B_%Y__%H_%M_%S')
 EXPERIMENT_NAME="${EXPERIMENT_NAME}__${CURRENT_DATE}"
 EXPERIMENT_PATH="experiments/$EXPERIMENT_NAME"
 
+mkdir "experiments" 2> null
 mkdir "experiments/${EXPERIMENT_NAME}"
 echo "Starting experiment: $EXPERIMENT_NAME"
 
