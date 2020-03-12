@@ -6,6 +6,7 @@ from learners.maml import MAML
 
 from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from time import time
 
@@ -82,6 +83,19 @@ class MetaTrainer:
         # Used to save best checkpoint, initially None
         self.best_score = None
 
+        # Initialize summary writer to save logs during training that can be visualized in Tensorboard
+        self.writer = SummaryWriter(f'experiments/{self.args.experiment_name}/{self.args.experiment_name}')
+        # Add layout for combined metrics on custom scalars page
+        layout = {
+            'Accuracies': {
+                'all_accuracies':
+                    ['Multiline', ['Accuracies/train_accuracy', 'Accuracies/val_accuracy', 'Accuracies/test_accuracy']]},
+            'Losses': {
+                'all_losses':
+                    ['Multiline', ['Losses/train_loss', 'Losses/val_loss', 'Losses/test_loss']]}
+        }
+        self.writer.add_custom_scalars(layout)
+
     def train(self, training=False, validation=False, testing=False, resume=False, train_iter=None):
         # Check that exactly one of training/validation/testing parameters is set to True
         assert int(training) + int(validation) + int(testing) == 1
@@ -100,6 +114,7 @@ class MetaTrainer:
             if resume:
                 self.load_checkpoint(checkpoint_name='best_checkpoint')
                 num_meta_iterations = self.args.test_num_iters
+                train_iter = self.args.meta_iters + 1
             dataloader = self.test_dataloader
         assert dataloader is not None
         assert num_meta_iterations is not None
@@ -138,19 +153,42 @@ class MetaTrainer:
             if (training and it % self.args.train_print_step == 0) or (not training and it == num_meta_iterations):
                 end = time()
 
+                print_step = None
+                phase = None
+                train_it = None
                 if training:
                     print_step = self.args.train_print_step
-                    phase = '[TRAIN]'
+                    phase = 'train'
+                    train_it = it
                 if validation:
                     print_step = num_meta_iterations + 1
-                    phase = '[VAL]'
+                    phase = 'val'
+                    train_it = train_iter
                 if testing:
                     print_step = num_meta_iterations + 1
-                    phase = '[TEST]'
+                    phase = 'test'
+                    train_it = train_iter
+                assert print_step is not None and phase is not None and train_it is not None
 
-                print(f'{phase} Iteration {it} loss: {running_loss / (self.args.tasks_num * print_step) :.5f} '
-                      f'accuracy: {100 * running_accuracy / (self.args.tasks_num * print_step) :.2f}% '
+                log_loss = running_loss / (self.args.tasks_num * print_step)
+                log_accuracy = 100 * running_accuracy / (self.args.tasks_num * print_step)
+
+                # Print console logs
+                print(f'[{str.upper(phase)}] Iteration {train_it} loss: {log_loss :.5f} '
+                      f'accuracy: {log_accuracy :.2f}% '
                       f'speed: {print_step / (end - start) :.2f} iter/s')
+
+                # Save Tensorboard logs
+                self.writer.add_scalar(f'Losses/{phase}_loss', log_loss, train_it)
+                self.writer.add_scalar(f'Accuracies/{phase}_accuracy', log_accuracy, train_it)
+
+                # Save combined logs
+                # self.writer.add_scalars('Losses/all_losses', {
+                #     f'{phase}_loss': log_loss
+                # }, train_it)
+                # self.writer.add_scalars('Accuracies/all_accuracies', {
+                #     f'{phase}_accuracy': log_accuracy
+                # }, train_it)
 
                 # Save best model based on val accuracy
                 if validation and (self.best_score is None or
@@ -167,7 +205,7 @@ class MetaTrainer:
             if training and it > int(0.0000005 * self.args.meta_iters) and it % self.args.val_print_step == 0:
                 self.learner.set_eval_mode()
                 self.eval(train_iter=it)
-                self.test(resume=False)
+                self.test(train_iter=it, resume=False)
                 # Model must be set back to training mode after an evaluation
                 # [TODO] implement and set_train_mode() for the learner instead of accessing member
                 self.learner.set_train_mode()
@@ -181,9 +219,9 @@ class MetaTrainer:
         self.learner.set_eval_mode()
         self.train(validation=True, train_iter=train_iter)
 
-    def test(self, resume=False):
+    def test(self, train_iter=None, resume=False):
         self.learner.set_train_mode()
-        self.train(testing=True, resume=resume)
+        self.train(testing=True, train_iter=train_iter, resume=resume)
 
     def save_checkpoint(self, it, checkpoint_name):
         if not os.path.isdir(f'experiments/{self.args.experiment_name}'):
