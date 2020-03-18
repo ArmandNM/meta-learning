@@ -13,7 +13,7 @@ from time import time
 
 class MetaTrainer:
     def __init__(self):
-        self.argparser = argparse.ArgumentParser()
+        self.argparser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 
         self.argparser.add_argument('--n_ways', type=int, help='num of classes', default=5)
         self.argparser.add_argument('--k_spt', type=int, help='samples per class in support set', default=1)
@@ -34,11 +34,11 @@ class MetaTrainer:
                                     help='number of meta iterations to run for validation', default=50)
         self.argparser.add_argument('--test_num_iters', type=int,
                                     help='number of meta iterations to run for testing', default=1000)
-        self.argparser.add_argument('--checkpoint_step', type=str,
+        self.argparser.add_argument('--checkpoint_step', type=int,
                                     help='number of meta iterations before saving checkpoint', default=500)
 
         # Parse general meta-learning args
-        self.args, additional_args = self.argparser.parse_known_args()
+        self.args, additional_args = self.argparser.parse_known_args(['@config'])
 
         # Selected meta-learner constructor
         learner_constructor = None
