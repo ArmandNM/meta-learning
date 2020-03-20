@@ -7,7 +7,6 @@
 --meta_iters=60000
 --meta_lr=1e-3
 --dataset=miniimagenet
---experiment_name=maml
 
 --train_print_step=10
 --val_print_step=50

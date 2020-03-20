@@ -59,6 +59,7 @@ def mock_train_maml():
     meta_trainer.train(training=True)
     # Test using best checkpoint saved
     meta_trainer.test(resume=True)
+    meta_trainer.writer.close()
 
 
 def main():

@@ -24,7 +24,7 @@ class MetaTrainer:
         self.argparser.add_argument('--meta_iters', type=int, help='num of meta iterations', default=60000)
         self.argparser.add_argument('--meta_lr', type=float, help='meta learning rate', default=1e-3)
         self.argparser.add_argument('--dataset', type=str, help='meta dataset to use', default='miniimagenet')
-        self.argparser.add_argument('--experiment_name', type=str, help='name of current experiment', default='maml')
+        self.argparser.add_argument('--experiment_name', type=str, help='name of current experiment', default='maml_vanilla')
 
         self.argparser.add_argument('--train_print_step', type=int,
                                     help='number of meta iterations before printing metrics', default=10)
@@ -37,8 +37,11 @@ class MetaTrainer:
         self.argparser.add_argument('--checkpoint_step', type=int,
                                     help='number of meta iterations before saving checkpoint', default=500)
 
-        # Parse general meta-learning args
-        self.args, additional_args = self.argparser.parse_known_args(['@config'])
+
+        # Parse general meta-learning args. Line arguments overwrite config file arguments
+        self.args, additional_args_file = self.argparser.parse_known_args(['@config'])
+        self.args, additional_args_command_line = self.argparser.parse_known_args(namespace=self.args)
+        additional_args = additional_args_file + additional_args_command_line
 
         # Selected meta-learner constructor
         learner_constructor = None
