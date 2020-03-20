@@ -8,25 +8,29 @@ from torchmeta.utils.data import BatchMetaDataLoader
 from time import time
 
 from models.metaconv import MetaConv
+from models.metaconv_contextual import MetaConvContextual
 from learners.meta_trainer import MetaTrainer
 
 
 def mock_train(train_inputs, train_labels):
-    model = MetaConv(in_size=train_inputs.size(2),
-                     in_channels=train_inputs.size(1),
-                     out_channels=train_labels.size(0))
+    # model = MetaConv(in_size=train_inputs.size(2),
+    #                  in_channels=train_inputs.size(1),
+    #                  out_channels=train_labels.size(0))
+    model = MetaConvContextual()
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
     model.train()
+    model.freeze_shared_params()
+    # model.unfreeze_all_params()
 
     running_loss = 0.0
     running_accuracy = 0.0
     start = time()
 
-    print_step = 50
+    print_step = 10
 
-    for i in range(100):
+    for i in range(500):
         optimizer.zero_grad()
 
         outputs = model(train_inputs)
