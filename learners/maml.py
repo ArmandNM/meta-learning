@@ -1,9 +1,9 @@
 import torch
 import higher
-import os
 import argparse
 
 from models.metaconv import MetaConv
+from models.metaconv_contextual import MetaConvContextual
 
 
 class MAML:
@@ -13,6 +13,9 @@ class MAML:
         self.model = None
         if args.model == 'meta_conv':
             self.model = MetaConv(out_channels=self.args.n_ways)
+            self.model.cuda()
+        if args.model == 'meta_conv_contextual':
+            self.model = MetaConvContextual(out_channels=self.args.n_ways)
             self.model.cuda()
         assert self.model is not None
 
@@ -24,7 +27,10 @@ class MAML:
         argparser.add_argument('--inner_steps_test', type=int, help='number of iters in inner loop ar test time', default=10)
         argparser.add_argument('--model', type=str, help='model optimized in inner loop', default='meta_conv')
 
-    def get_trainable_params(self):
+    def get_inner_trainable_params(self):
+        return self.model.parameters()
+
+    def get_outer_trainable_params(self):
         return self.model.parameters()
 
     def set_train_mode(self):
@@ -47,7 +53,7 @@ class MAML:
         meta_train_inputs, meta_train_labels = meta_batch["train"]
         meta_test_inputs, meta_test_labels = meta_batch["test"]
 
-        inner_optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-2)
+        inner_optimizer = torch.optim.SGD(self.get_inner_trainable_params(), lr=1e-2)
 
         for task_idx in range(self.args.tasks_num):
             # Create inner loop context using higher library

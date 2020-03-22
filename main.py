@@ -82,7 +82,7 @@ def main():
         print(f'Test inputs shape: {test_inputs.shape}')
         print(f'Test labels shape: {test_labels.shape}')
 
-        mock_train(train_inputs[0], train_labels[0])
+        # mock_train(train_inputs[0], train_labels[0])
 
         break
 

@@ -17,7 +17,7 @@ class ConvBlock(torch.nn.Module):
 
 
 class MetaConvContextual(torch.nn.Module):
-    def __init__(self, in_size=84, in_channels=3, out_channels=5, hidden_size=32, num_context_params=100):
+    def __init__(self, in_size=84, in_channels=3, out_channels=5, hidden_size=512, num_context_params=100):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -60,7 +60,7 @@ class MetaConvContextual(torch.nn.Module):
             p.requires_grad = True
 
     def reset_context_params(self):
-        self.context_params = self.context_params.detach() * 0
+        self.context_params.data = self.context_params.data.detach() * 0
         self.context_params.requires_grad = True
 
 

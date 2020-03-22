@@ -3,6 +3,7 @@ import argparse
 import os
 
 from learners.maml import MAML
+from learners.cavia import CAVIA
 
 from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
@@ -48,6 +49,8 @@ class MetaTrainer:
         print(self.args)
         if self.args.meta_learner == 'maml':
             learner_constructor = MAML
+        if self.args.meta_learner == 'cavia':
+            learner_constructor = CAVIA
         assert learner_constructor is not None
 
         # Parse specific parameters of the selected meta-learner
@@ -80,7 +83,7 @@ class MetaTrainer:
         # Create optimizer
         self.optimizer = None
         if self.args.meta_optimizer == 'adam':
-            self.optimizer = torch.optim.Adam(params=self.learner.get_trainable_params(), lr=self.args.meta_lr)
+            self.optimizer = torch.optim.Adam(params=self.learner.get_outer_trainable_params(), lr=self.args.meta_lr)
         assert self.optimizer is not None
 
         # Used to save best checkpoint, initially None

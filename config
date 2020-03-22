@@ -2,7 +2,7 @@
 --k_spt=1
 --k_qry=15
 --tasks_num=5
---meta_learner=maml
+--meta_learner=cavia
 --meta_optimizer=adam
 --meta_iters=60000
 --meta_lr=1e-3
@@ -14,6 +14,6 @@
 --test_num_iters=1000
 --checkpoint_step=500
 
---inner_steps_train=5
---inner_steps_test=10
---model=meta_conv
+--inner_steps_train=2
+--inner_steps_test=2
+--model=meta_conv_contextual
