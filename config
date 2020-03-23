@@ -2,7 +2,7 @@
 --k_spt=1
 --k_qry=15
 --tasks_num=5
---meta_learner=cavia
+--meta_learner=grifon
 --meta_optimizer=adam
 --meta_iters=60000
 --meta_lr=1e-3
@@ -16,4 +16,4 @@
 
 --inner_steps_train=2
 --inner_steps_test=2
---model=meta_conv_contextual
+--model=meta_conv_support

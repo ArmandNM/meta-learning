@@ -3,7 +3,7 @@
 # First argument represents the name of the experiment. If not given, use default
 if [ -z "$1" ]
   then
-    EXPERIMENT_NAME="cavia_vanilla"
+    EXPERIMENT_NAME="grifon_v1"
   else
     EXPERIMENT_NAME=$1
 fi

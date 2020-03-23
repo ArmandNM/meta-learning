@@ -4,6 +4,7 @@ import os
 
 from learners.maml import MAML
 from learners.cavia import CAVIA
+from learners.grifon import GRIFON
 
 from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
@@ -51,6 +52,8 @@ class MetaTrainer:
             learner_constructor = MAML
         if self.args.meta_learner == 'cavia':
             learner_constructor = CAVIA
+        if self.args.meta_learner == 'grifon':
+            learner_constructor = GRIFON
         assert learner_constructor is not None
 
         # Parse specific parameters of the selected meta-learner
