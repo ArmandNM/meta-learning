@@ -88,17 +88,12 @@ class TestGRIFON(unittest.TestCase, GenericTest):
 
     def test_train_iteration(self):
         learner = GRIFON(self.args)
-        original_learner = copy.deepcopy(learner)
-        optimizer = torch.optim.Adam(params=learner.get_outer_trainable_params(), lr=1e-3)
+        super(TestGRIFON, self).test_train_iteration(learner)
 
-        # Run one meta-training iteration
-        optimizer.zero_grad()
-        _, _ = learner.run_iteration(self.meta_batch, training=True)
-        optimizer.step()
-
-        # Check that outer trainable params changed
-        exceptions = list(map(lambda p: p.data_ptr(), original_learner.get_outer_trainable_params()))
-        self._equal_parameters(learner.model.parameters(), original_learner.model.parameters(), exceptions)
+    def test_batch_overfit(self):
+        model = MetaConvSupport(out_channels=self.args.n_ways)
+        model.set_support_params(self.inputs)
+        super(TestGRIFON, self).test_batch_overfit(model=model, learnable_params=model.film_fc.parameters())
 
 
 if __name__ == '__main__':
