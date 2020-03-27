@@ -4,29 +4,17 @@ import unittest
 import argparse
 import copy
 
+from tests.generic_test import GenericTest
 from models.metaconv_support import MetaConvSupport
-from torchmeta.datasets.helpers import miniimagenet
-from torchmeta.utils.data import BatchMetaDataLoader
 
 from learners.grifon import GRIFON
 
 
-class TestGRIFON(unittest.TestCase):
+class TestGRIFON(unittest.TestCase, GenericTest):
     def __init__(self, *args, **kwargs):
         super(TestGRIFON, self).__init__(*args, **kwargs)
         self._initialize_args()
         self._load_batch(n_ways=self.args.n_ways, tasks_num=self.args.tasks_num)
-
-    def _load_batch(self, n_ways=5, k_spt=1, k_qry=15, tasks_num=4):
-        train_dataset = miniimagenet('../datasets', ways=n_ways, shots=k_spt, test_shots=k_qry,
-                                     meta_train=True, download=True)
-        self.dataloader = BatchMetaDataLoader(train_dataset, batch_size=tasks_num, num_workers=4)
-        for meta_batch in self.dataloader:
-            self.meta_batch = meta_batch
-            meta_train_inputs, meta_train_labels = meta_batch["train"]
-            self.inputs = meta_train_inputs[0]
-            self.labels = meta_train_labels[0]
-            return
 
     def _initialize_args(self):
         self.argparser = argparse.ArgumentParser()
@@ -36,14 +24,6 @@ class TestGRIFON(unittest.TestCase):
         self.argparser.add_argument('--inner_steps_train', type=int, default=2)
         self.argparser.add_argument('--inner_steps_test', type=int, default=2)
         self.args, _ = self.argparser.parse_known_args()
-
-    def _equal_parameters(self, params1, params2, exceptions=None):
-        for param1, param2 in zip(params1, params2):
-            if exceptions is not None and param2.data_ptr() in exceptions:
-                self.assertTrue(param1.data.ne(param2.data).sum() > 0)
-                continue
-
-            self.assertTrue(param1.data.ne(param2.data).sum() == 0)
 
     def test_inner_loop(self):
         # Create new model
@@ -91,7 +71,6 @@ class TestGRIFON(unittest.TestCase):
             # Check that only film fc layer is updated
             exceptions = list(map(lambda p: p.data_ptr(), original_model.film_fc.parameters()))
             self._equal_parameters(fmodel.parameters(), original_model.parameters(), exceptions)
-
 
         # Testing for track_higher_grads = False
         with higher.innerloop_ctx(model, opt=inner_optimizer,
