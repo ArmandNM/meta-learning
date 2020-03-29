@@ -19,6 +19,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
     def _initialize_args(self):
         self.argparser = argparse.ArgumentParser()
         self.argparser.add_argument('--n_ways', type=int, default=5)
+        self.argparser.add_argument('--k_spt', type=int, default=1)
         self.argparser.add_argument('--tasks_num', type=int, default=4)
         self.argparser.add_argument('--model', type=str, default='meta_conv_support')
         self.argparser.add_argument('--inner_steps_train', type=int, default=2)
@@ -35,7 +36,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         # Save initial model weights
         original_model = copy.deepcopy(model)
 
-        inner_optimizer = torch.optim.SGD(model.film_fc.parameters(), lr=1e-2)
+        inner_optimizer = torch.optim.SGD(model.fc.parameters(), lr=1e-2)
         inner_optimizer.zero_grad()
 
         # Make one training iteration
@@ -45,7 +46,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         inner_optimizer.step()
 
         # Check that only film fc layer is updated
-        exceptions = list(map(lambda p: p.data_ptr(), original_model.film_fc.parameters()))
+        exceptions = list(map(lambda p: p.data_ptr(), original_model.fc.parameters()))
         self._equal_parameters(model.parameters(), original_model.parameters(), exceptions)
 
     def test_inner_loop_higher(self):
@@ -58,7 +59,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         # Save initial model weights
         original_model = copy.deepcopy(model)
 
-        inner_optimizer = torch.optim.SGD(model.film_fc.parameters(), lr=1e-2)
+        inner_optimizer = torch.optim.SGD(model.fc.parameters(), lr=1e-2)
         inner_optimizer.zero_grad()
 
         # Testing for track_higher_grads = True
@@ -69,7 +70,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
             diffopt.step(loss)
 
             # Check that only film fc layer is updated
-            exceptions = list(map(lambda p: p.data_ptr(), original_model.film_fc.parameters()))
+            exceptions = list(map(lambda p: p.data_ptr(), original_model.fc.parameters()))
             self._equal_parameters(fmodel.parameters(), original_model.parameters(), exceptions)
 
         # Testing for track_higher_grads = False
@@ -80,7 +81,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
             diffopt.step(loss)
 
             # Check that only film fc layer is updated
-            exceptions = list(map(lambda p: p.data_ptr(), original_model.film_fc.parameters()))
+            exceptions = list(map(lambda p: p.data_ptr(), original_model.fc.parameters()))
             self._equal_parameters(fmodel.parameters(), original_model.parameters(), exceptions)
 
         # Check that original model is unchanged
@@ -93,7 +94,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
     def test_batch_overfit(self):
         model = MetaConvSupport(out_channels=self.args.n_ways)
         model.set_support_params(self.inputs)
-        super(TestGRIFON, self).test_batch_overfit(model=model, learnable_params=model.film_fc.parameters())
+        super(TestGRIFON, self).test_batch_overfit(model=model, learnable_params=model.fc.parameters())
 
 
 if __name__ == '__main__':

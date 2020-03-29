@@ -21,12 +21,12 @@ class MetaTrainer:
         self.argparser.add_argument('--k_spt', type=int, help='samples per class in support set', default=1)
         self.argparser.add_argument('--k_qry', type=int, help='samples per class in query set', default=15)
         self.argparser.add_argument('--tasks_num', type=int, help='meta batch size', default=5)
-        self.argparser.add_argument('--meta_learner', type=str, help='name of meta learning method', default='maml')
+        self.argparser.add_argument('--meta_learner', type=str, help='name of meta learning method', default='grifon')
         self.argparser.add_argument('--meta_optimizer', type=str, help='meta optimizer', default='adam')
         self.argparser.add_argument('--meta_iters', type=int, help='num of meta iterations', default=60000)
         self.argparser.add_argument('--meta_lr', type=float, help='meta learning rate', default=1e-3)
         self.argparser.add_argument('--dataset', type=str, help='meta dataset to use', default='miniimagenet')
-        self.argparser.add_argument('--experiment_name', type=str, help='name of current experiment', default='maml_vanilla')
+        self.argparser.add_argument('--experiment_name', type=str, help='name of current experiment', default='test')
 
         self.argparser.add_argument('--train_print_step', type=int,
                                     help='number of meta iterations before printing metrics', default=10)
