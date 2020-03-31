@@ -67,7 +67,7 @@ class GRIFON:
             test_inputs = meta_test_inputs[task_idx].cuda()
             test_labels = meta_test_labels[task_idx].cuda()
 
-            self.model.set_support_params(train_inputs)
+            # self.model.set_support_params(train_inputs)
 
             # Create inner loop context using higher library
             with higher.innerloop_ctx(self.model, opt=inner_optimizer,
@@ -75,7 +75,8 @@ class GRIFON:
 
                 # Inner loop
                 for _ in range(inner_steps):
-                    train_logits = fmodel(train_inputs)
+                    train_logits = fmodel.forward(train_inputs, is_support=True)
+
                     train_loss = torch.nn.functional.cross_entropy(train_logits, train_labels)
 
                     # _, train_predictions = torch.max(train_logits, dim=1)
@@ -83,6 +84,9 @@ class GRIFON:
                     # print(train_accuracy)
 
                     diffopt.step(train_loss)
+
+                # One extra iteration to compute the support set intermediary features using current weights
+                fmodel.forward(train_inputs, is_support=True)
 
                 # Query the trained model
                 test_logits = fmodel(test_inputs)

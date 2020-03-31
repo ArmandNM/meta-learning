@@ -28,7 +28,7 @@ class GenericTest:
 
             self.assertTrue(param1.data.ne(param2.data).sum() == 0)
 
-    def test_batch_overfit(self, model, learnable_params, verbose=False, print_step=10):
+    def test_batch_overfit(self, model, learnable_params, verbose=False, print_step=10, is_support=False):
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(learnable_params, lr=1e-3)
 
@@ -44,7 +44,10 @@ class GenericTest:
         for i in range(500):
             optimizer.zero_grad()
 
-            outputs = model(self.inputs)
+            if is_support:
+                outputs = model.forward(self.inputs, is_support)
+            else:
+                outputs = model.forward(self.inputs)
 
             loss = criterion(outputs, self.labels)
             loss.backward()

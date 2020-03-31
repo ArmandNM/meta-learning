@@ -30,9 +30,6 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         # Create new model
         model = MetaConvSupport()
 
-        # Compute support embeddings
-        model.set_support_params(self.inputs)
-
         # Save initial model weights
         original_model = copy.deepcopy(model)
 
@@ -40,7 +37,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         inner_optimizer.zero_grad()
 
         # Make one training iteration
-        logits = model(self.inputs)
+        logits = model.forward(self.inputs, is_support=True)
         loss = torch.nn.functional.cross_entropy(logits, self.labels)
         loss.backward()
         inner_optimizer.step()
@@ -53,9 +50,6 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         # Create new model
         model = MetaConvSupport()
 
-        # Compute support embeddings
-        model.set_support_params(self.inputs)
-
         # Save initial model weights
         original_model = copy.deepcopy(model)
 
@@ -65,7 +59,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         # Testing for track_higher_grads = True
         with higher.innerloop_ctx(model, opt=inner_optimizer,
                                   copy_initial_weights=False, track_higher_grads=True) as (fmodel, diffopt):
-            logits = fmodel(self.inputs)
+            logits = fmodel.forward(self.inputs, is_support=True)
             loss = torch.nn.functional.cross_entropy(logits, self.labels)
             diffopt.step(loss)
 
@@ -76,7 +70,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         # Testing for track_higher_grads = False
         with higher.innerloop_ctx(model, opt=inner_optimizer,
                                   copy_initial_weights=False, track_higher_grads=False) as (fmodel, diffopt):
-            logits = fmodel(self.inputs)
+            logits = fmodel.forward(self.inputs, is_support=True)
             loss = torch.nn.functional.cross_entropy(logits, self.labels)
             diffopt.step(loss)
 
@@ -93,8 +87,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
 
     def test_batch_overfit(self):
         model = MetaConvSupport(out_channels=self.args.n_ways)
-        model.set_support_params(self.inputs)
-        super(TestGRIFON, self).test_batch_overfit(model=model, learnable_params=model.fc.parameters())
+        super(TestGRIFON, self).test_batch_overfit(model=model, learnable_params=model.fc.parameters(), is_support=True)
 
 
 if __name__ == '__main__':
