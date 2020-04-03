@@ -18,3 +18,4 @@
 --inner_steps_test=3
 --inner_lr=1e-2
 --model=meta_conv_support
+--num_filters=32

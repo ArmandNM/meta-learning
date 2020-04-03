@@ -10,28 +10,16 @@ class ConvBlock(torch.nn.Module):
         self.batchnorm2d = torch.nn.BatchNorm2d(num_features=out_channels, momentum=1.0, track_running_stats=False)
         self.cached_support_features = None
 
-    def forward(self, x, is_support=False, n_ways=None, k_spt=None, hidden_size=None):
+    def forward(self, x, is_support=False):
         x = self.conv2d(x)
         x = self.batchnorm2d(x)
         x = F.relu(x)
         x = F.max_pool2d(x, 2)
 
         if is_support:
-            self.cached_support_features = self.aggregate_features(x, n_ways, k_spt, hidden_size)
-            self.cached_support_features.requires_grad = False
+            self.cached_support_features = x.detach()
 
         return x
-
-    @staticmethod
-    def aggregate_features(intermediate_features, n_ways, k_spt, hidden_size):
-        # Compute global average pooling
-        intermediate_features = F.avg_pool2d(intermediate_features.detach(), intermediate_features.size()[-1])
-        # Separate features by class changing shape to: [N, K, ...]
-        # TODO: hidden size can be determined from intermediate_features shape, remove it from method parameters
-        intermediate_features = intermediate_features.view(n_ways, k_spt, hidden_size)
-        # Average over all examples in the same class
-        intermediate_features = intermediate_features.mean(axis=1)
-        return intermediate_features.detach()
 
 
 class AttentionModule(torch.nn.Module):
@@ -119,16 +107,26 @@ class MetaConvSupport(torch.nn.Module):
 
     def forward(self, x, is_support=False):
         # TODO: give conv block access to n, k, hidden_size directly so we don't have to pass them
-        x = self.block1.forward(x, is_support=is_support, n_ways=self.out_channels, k_spt=self.k_spt, hidden_size=self.hidden_size)
-        x = self.block2.forward(x, is_support=is_support, n_ways=self.out_channels, k_spt=self.k_spt, hidden_size=self.hidden_size)
+        x = self.block1.forward(x, is_support=is_support)
+        x = self.block2.forward(x, is_support=is_support)
 
-        x = self.block3.forward(x, is_support=is_support, n_ways=self.out_channels, k_spt=self.k_spt, hidden_size=self.hidden_size)
-        x = self.attention3.forward(x, proto_spt=self.block3.cached_support_features)
+        x = self.block3.forward(x, is_support=is_support)
+        x = self.attention3.forward(x, proto_spt=self.aggregate_features(self.block3.cached_support_features))
 
-        x = self.block4.forward(x, is_support=is_support, n_ways=self.out_channels, k_spt=self.k_spt, hidden_size=self.hidden_size)
-        x = self.attention4.forward(x, proto_spt=self.block4.cached_support_features)
+        x = self.block4.forward(x, is_support=is_support)
+        x = self.attention4.forward(x, proto_spt=self.aggregate_features(self.block4.cached_support_features))
 
         x = x.reshape(x.size(0), -1)
         x = self.fc(x)
 
         return x
+
+    def aggregate_features(self, intermediate_features):
+        # Compute global average pooling
+        intermediate_features = F.avg_pool2d(intermediate_features.detach(), intermediate_features.size()[-1])
+        # Separate features by class changing shape to: [N, K, ...]
+        # TODO: hidden size can be determined from intermediate_features shape, remove it from method parameters
+        intermediate_features = intermediate_features.view(self.out_channels, self.k_spt, self.hidden_size)
+        # Average over all examples in the same class
+        intermediate_features = intermediate_features.mean(axis=1)
+        return intermediate_features.detach()

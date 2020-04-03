@@ -19,7 +19,8 @@ class GRIFON:
             self.model = MetaConvContextual(out_channels=self.args.n_ways)
             self.model.cuda()
         if args.model == 'meta_conv_support':
-            self.model = MetaConvSupport(out_channels=self.args.n_ways, k_spt=self.args.k_spt)
+            self.model = MetaConvSupport(out_channels=self.args.n_ways, k_spt=self.args.k_spt,
+                                         hidden_size=self.args.num_filters)
             self.model.cuda()
         assert self.model is not None
 
@@ -31,6 +32,7 @@ class GRIFON:
         argparser.add_argument('--inner_steps_test', type=int, help='number of iters in inner loop ar test time', default=10)
         argparser.add_argument('--inner_lr', type=float, help='number of iters in inner loop ar test time', default=1e-2)
         argparser.add_argument('--model', type=str, help='model optimized in inner loop', default='meta_conv_support')
+        argparser.add_argument('--num_filters', type=int, help='number of conv filters', default=32)
 
     def get_inner_trainable_params(self):
         return self.model.fc.parameters()
