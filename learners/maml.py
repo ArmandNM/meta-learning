@@ -91,7 +91,7 @@ class MAML:
 
                 # Propagate task loss through inner loop rollup
                 if training:
-                    test_loss.backward()
+                    torch.div(test_loss, 100 * self.args.tasks_num).backward()
 
         return meta_batch_loss, meta_batch_accuracy
 
