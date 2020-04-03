@@ -15,5 +15,6 @@
 --checkpoint_step=500
 
 --inner_steps_train=2
---inner_steps_test=2
+--inner_steps_test=3
+--inner_lr=1e-2
 --model=meta_conv_support

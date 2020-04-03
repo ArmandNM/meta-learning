@@ -29,6 +29,7 @@ class GRIFON:
     def add_arguments(argparser: argparse.ArgumentParser):
         argparser.add_argument('--inner_steps_train', type=int, help='number of iters in inner loop ar train time', default=5)
         argparser.add_argument('--inner_steps_test', type=int, help='number of iters in inner loop ar test time', default=10)
+        argparser.add_argument('--inner_lr', type=float, help='number of iters in inner loop ar test time', default=1e-2)
         argparser.add_argument('--model', type=str, help='model optimized in inner loop', default='meta_conv_support')
 
     def get_inner_trainable_params(self):
@@ -57,7 +58,7 @@ class GRIFON:
         meta_train_inputs, meta_train_labels = meta_batch["train"]
         meta_test_inputs, meta_test_labels = meta_batch["test"]
 
-        inner_optimizer = torch.optim.SGD(self.get_inner_trainable_params(), lr=1e-2)
+        inner_optimizer = torch.optim.SGD(self.get_inner_trainable_params(), lr=self.args.inner_lr)
 
         for task_idx in range(self.args.tasks_num):
             # Extract examples and labels for current task
