@@ -132,14 +132,15 @@ class MetaTrainer:
         running_accuracy = 0.0
         start = time()
 
-        for it, meta_batch in enumerate(dataloader):
+        for it, meta_batch in enumerate(dataloader, 1):
             # Stop conditions
             if it > num_meta_iterations:
                 break
 
+            # TODO: add support for training resume
             # Load immediately after saving model only for developing purposes
-            if training and it > 0 and (it - 1) % self.args.checkpoint_step == 0:
-                self.load_checkpoint(checkpoint_name=f'checkpoint_{it - 1}')
+            # if training and it > 1 and (it - 1) % self.args.checkpoint_step == 0:
+            #     self.load_checkpoint(checkpoint_name=f'checkpoint_{it - 1}')
 
             # Only care about meta-optimizer at meta-training time
             if training:
@@ -170,11 +171,11 @@ class MetaTrainer:
                     phase = 'train'
                     train_it = it
                 if validation:
-                    print_step = num_meta_iterations + 1
+                    print_step = num_meta_iterations
                     phase = 'val'
                     train_it = train_iter
                 if testing:
-                    print_step = num_meta_iterations + 1
+                    print_step = num_meta_iterations
                     phase = 'test'
                     train_it = train_iter
                 assert print_step is not None and phase is not None and train_it is not None
