@@ -73,6 +73,113 @@ class AttentionModule(torch.nn.Module):
         return x
 
 
+class AttentionModuleV2(torch.nn.Module):
+    def __init__(self, hidden_size, fc_x_query=None, fc_spt_key=None, fc_spt_value=None, fc_x_update=None, fc_update=None,
+                 fc_spt_spt_query=None, fc_spt_spt_key=None, fc_spt_spt_value=None):
+        # TODO: Create different modules to separate attention from film aggregation
+        super().__init__()
+        self.hidden_size = hidden_size
+
+        # Create new layers if None are given to reuse
+        if fc_x_query is not None:
+            self.fc_x_query = fc_x_query
+        else:
+            self.fc_x_query = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_spt_key is not None:
+            self.fc_spt_key = fc_spt_key
+        else:
+            self.fc_spt_key = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_spt_value is not None:
+            self.fc_spt_value = fc_spt_value
+        else:
+            self.fc_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_x_update is not None:
+            self.fc_x_update = fc_x_update
+        else:
+            self.fc_x_update = torch.nn.Linear(2 * hidden_size, hidden_size, bias=True)
+
+        if fc_update is not None:
+            self.fc_update = fc_update
+        else:
+            self.fc_update = torch.nn.Linear(2 * hidden_size, 2 * hidden_size, bias=True)
+
+        if fc_spt_spt_query is not None:
+            self.fc_spt_spt_query = fc_spt_spt_query
+        else:
+            self.fc_spt_spt_query = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_spt_spt_key is not None:
+            self.fc_spt_spt_key = fc_spt_spt_key
+        else:
+            self.fc_spt_spt_key = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_spt_spt_value is not None:
+            self.fc_spt_spt_value = fc_spt_spt_value
+        else:
+            self.fc_spt_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+    def forward(self, x, proto_spt):
+        proto_x = x.mean(axis=3).mean(axis=2)
+
+        # Reshape from [N*K, C] to [N*K, 1, C]
+        proto_x = proto_x.unsqueeze(dim=1)
+
+        # Reshape from [N, C] to [1, N, C]
+        proto_spt = proto_spt.unsqueeze(dim=0)
+
+        # Self-attention
+        query = self.fc_x_query(proto_x)
+        key = self.fc_spt_key(proto_spt)
+        value = self.fc_spt_value(proto_spt)
+
+        key_t = torch.transpose(key, dim0=1, dim1=2)
+        correlation = torch.matmul(query, key_t) / math.sqrt(self.hidden_size)
+        correlation = F.softmax(correlation, dim=-1)
+        aggregated_messages = torch.matmul(correlation, value)
+
+        # Compute updated proto_x based on current proto_x and context
+        proto_x = self.fc_x_update(torch.cat([proto_x, aggregated_messages], dim=-1))
+
+        # Send messages from proto_x to support
+        # TODO: experiment with other update methods. Ex: proto_spt = W[proto_x|proto_spt] + proto_spt,
+        proto_spt = proto_spt + proto_x
+
+        # Send messages between support prototypes
+        # Self-attention
+        query = self.fc_spt_spt_query(proto_spt)
+        key = self.fc_spt_spt_key(proto_spt)
+        value = self.fc_spt_spt_value(proto_spt)
+
+        key_t = torch.transpose(key, dim0=1, dim1=2)
+        correlation = torch.matmul(query, key_t) / math.sqrt(self.hidden_size)
+        correlation = F.softmax(correlation, dim=-1)
+        proto_spt = torch.matmul(correlation, value)
+
+        # Send messages from support to x
+        # Self-attention
+        query = self.fc_x_query(proto_x)
+        key = self.fc_spt_key(proto_spt)
+        value = self.fc_spt_value(proto_spt)
+
+        key_t = torch.transpose(key, dim0=1, dim1=2)
+        correlation = torch.matmul(query, key_t) / math.sqrt(self.hidden_size)
+        correlation = F.softmax(correlation, dim=-1)
+        aggregated_messages = torch.matmul(correlation, value)
+
+        # Compute film params based on current x and context
+        film_params = self.fc_update(torch.cat([proto_x, aggregated_messages], dim=-1))
+
+        gamma = film_params[:, 0, :self.hidden_size].unsqueeze(dim=2).unsqueeze(dim=3)
+        beta = film_params[:, 0, self.hidden_size:].unsqueeze(-1).unsqueeze(-1)
+
+        x = gamma * x + beta
+
+        return x
+
+
 class MetaConvSupport(torch.nn.Module):
     def __init__(self, in_size=84, in_channels=3, out_channels=5, hidden_size=32, k_spt=1):
         super().__init__()
@@ -87,6 +194,11 @@ class MetaConvSupport(torch.nn.Module):
         self.fc_spt_key = torch.nn.Linear(hidden_size, hidden_size, bias=False)
         self.fc_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
 
+        self.fc_spt_spt_query = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+        self.fc_spt_spt_key = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+        self.fc_spt_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        self.fc_x_update = torch.nn.Linear(2 * hidden_size, hidden_size, bias=True)
         self.fc_update = torch.nn.Linear(2 * hidden_size, 2 * hidden_size, bias=True)
 
         # TODO: maybe rename hidden_size to num_filters
@@ -96,10 +208,15 @@ class MetaConvSupport(torch.nn.Module):
         self.block4 = ConvBlock(hidden_size, hidden_size)
 
         # Create attention modules that share the same fully connected layers
-        self.attention1 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
-        self.attention2 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
-        self.attention3 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
-        self.attention4 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
+        # self.attention1 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
+        # self.attention2 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
+        # self.attention3 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
+        # self.attention4 = AttentionModule(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_update)
+
+        self.attention1 = AttentionModuleV2(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_x_update, self.fc_update, self.fc_spt_spt_query, self.fc_spt_spt_key, self.fc_spt_spt_value)
+        self.attention2 = AttentionModuleV2(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_x_update, self.fc_update, self.fc_spt_spt_query, self.fc_spt_spt_key, self.fc_spt_spt_value)
+        self.attention3 = AttentionModuleV2(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_x_update, self.fc_update, self.fc_spt_spt_query, self.fc_spt_spt_key, self.fc_spt_spt_value)
+        self.attention4 = AttentionModuleV2(hidden_size, self.fc_x_query, self.fc_spt_key, self.fc_spt_value, self.fc_x_update, self.fc_update, self.fc_spt_spt_query, self.fc_spt_spt_key, self.fc_spt_spt_value)
 
         # self.film_fc = torch.nn.Linear(hidden_size, 2 * hidden_size)
 

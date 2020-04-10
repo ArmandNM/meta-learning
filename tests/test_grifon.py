@@ -22,6 +22,7 @@ class TestGRIFON(unittest.TestCase, GenericTest):
         self.argparser.add_argument('--k_spt', type=int, default=1)
         self.argparser.add_argument('--tasks_num', type=int, default=4)
         self.argparser.add_argument('--model', type=str, default='meta_conv_support')
+        self.argparser.add_argument('--num_filters', type=int, default=32)
         self.argparser.add_argument('--inner_steps_train', type=int, default=2)
         self.argparser.add_argument('--inner_steps_test', type=int, default=2)
         self.argparser.add_argument('--inner_lr', type=int, default=1e-2)

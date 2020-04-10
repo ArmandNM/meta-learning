@@ -35,7 +35,7 @@ class GRIFON:
         argparser.add_argument('--num_filters', type=int, help='number of conv filters', default=32)
 
     def get_inner_trainable_params(self):
-        return self.model.fc.parameters()
+        return self.model.fc_update.parameters()
 
     def get_outer_trainable_params(self):
         return self.model.parameters()
