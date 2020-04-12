@@ -221,6 +221,7 @@ class MetaConvSupport(torch.nn.Module):
         # self.film_fc = torch.nn.Linear(hidden_size, 2 * hidden_size)
 
         self.fc = torch.nn.Linear(int(in_size / 16) ** 2 * hidden_size, out_channels)
+        self.temp = torch.nn.Parameter(torch.tensor(10.0))
 
     def forward(self, x, is_support=False):
         # TODO: give conv block access to n, k, hidden_size directly so we don't have to pass them
@@ -228,13 +229,13 @@ class MetaConvSupport(torch.nn.Module):
         x = self.block2.forward(x, is_support=is_support)
 
         x = self.block3.forward(x, is_support=is_support)
-        x = self.attention3.forward(x, proto_spt=self.aggregate_features(self.block3.cached_support_features))
+        # x = self.attention3.forward(x, proto_spt=self.aggregate_features(self.block3.cached_support_features))
 
         x = self.block4.forward(x, is_support=is_support)
-        x = self.attention4.forward(x, proto_spt=self.aggregate_features(self.block4.cached_support_features))
+        # x = self.attention4.forward(x, proto_spt=self.aggregate_features(self.block4.cached_support_features))
 
         x = x.reshape(x.size(0), -1)
-        x = self.fc(x)
+        # x = self.fc(x)
 
         return x
 

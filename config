@@ -14,8 +14,8 @@
 --test_num_iters=1000
 --checkpoint_step=500
 
---inner_steps_train=5
---inner_steps_test=5
+--inner_steps_train=2
+--inner_steps_test=2
 --inner_lr=1e-2
 --model=meta_conv_support
 --num_filters=32

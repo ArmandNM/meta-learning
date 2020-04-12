@@ -2,6 +2,8 @@ import torch
 import higher
 import argparse
 
+import torch.nn.functional as F
+
 from models.metaconv import MetaConv
 from models.metaconv_contextual import MetaConvContextual
 from models.metaconv_support import MetaConvSupport
@@ -70,41 +72,31 @@ class GRIFON:
             test_inputs = meta_test_inputs[task_idx].cuda()
             test_labels = meta_test_labels[task_idx].cuda()
 
-            # self.model.set_support_params(train_inputs)
+            support_embeddings = self.model.forward(train_inputs, is_support=True)
+            support_embeddings = support_embeddings.view(self.args.n_ways, self.args.k_spt, -1)
+            train_labels = train_labels.view(self.args.n_ways, self.args.k_spt, -1).max(axis=1)[0][:, 0]
+            # Average over all examples in the same class
+            support_prototypes = support_embeddings.mean(axis=1)
+            support_prototypes = F.normalize(support_prototypes, p=2, dim=1)
 
-            # Create inner loop context using higher library
-            with higher.innerloop_ctx(self.model, opt=inner_optimizer,
-                                      copy_initial_weights=False, track_higher_grads=training) as (fmodel, diffopt):
+            query_embeddings = self.model.forward(test_inputs, is_support=False)
+            query_embeddings = F.normalize(query_embeddings, p=2, dim=1)
 
-                # Inner loop
-                for _ in range(inner_steps):
-                    train_logits = fmodel.forward(train_inputs, is_support=True)
+            prediction = torch.matmul(query_embeddings, support_prototypes.transpose(dim0=0, dim1=1))
+            prediction = self.model.temp * prediction
+            train_labels_oh = torch.nn.functional.one_hot(train_labels, self.args.n_ways)
+            prediction = torch.matmul(prediction, train_labels_oh.t().float())
+            # prediction = torch.gather(prediction, dim=1, index=train_labels)
 
-                    train_loss = torch.nn.functional.cross_entropy(train_logits, train_labels)
+            test_loss = F.cross_entropy(prediction, test_labels)
 
-                    # _, train_predictions = torch.max(train_logits, dim=1)
-                    # train_accuracy = (train_predictions == train_labels).sum().item() / train_labels.size(0)
-                    # print(train_accuracy)
+            _, test_predictions = torch.max(prediction, dim=1)
 
-                    diffopt.step(train_loss)
+            test_accuracy = (test_predictions == test_labels).sum().item() / test_labels.size(0)
 
-                # One extra iteration to compute the support set intermediary features using current weights
-                fmodel.forward(train_inputs, is_support=True)
-
-                # Query the trained model
-                test_logits = fmodel(test_inputs)
-                test_loss = torch.nn.functional.cross_entropy(test_logits, test_labels)
-                _, test_predictions = torch.max(test_logits, dim=1)
-
-                test_accuracy = (test_predictions == test_labels).sum().item() / test_labels.size(0)
-
-                # Compute metrics
-                meta_batch_loss += test_loss.detach()
-                meta_batch_accuracy += test_accuracy
-
-                # Propagate task loss through inner loop rollup
-                if training:
-                    torch.div(test_loss, 100*self.args.tasks_num).backward()
+            # Compute metrics
+            meta_batch_loss += test_loss.detach()
+            meta_batch_accuracy += test_accuracy
 
         return meta_batch_loss, meta_batch_accuracy
 
