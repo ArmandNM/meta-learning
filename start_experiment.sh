@@ -27,5 +27,5 @@ ln -s "$(pwd)/datasets" "$(pwd)/$EXPERIMENT_PATH/project/datasets"
 echo "Starting experiment: $EXPERIMENT_NAME"
 
 # Start experiment in the background
-nohup python main.py --training="yes" --experiment_name="${EXPERIMENT_NAME}" > "$EXPERIMENT_PATH/${EXPERIMENT_NAME}.log" 2>&1 &
+CUDA_VISIBLE_DEVICES=0 nohup python main.py --experiment_name="${EXPERIMENT_NAME}" > "$EXPERIMENT_PATH/${EXPERIMENT_NAME}.log" 2>&1 &
 tail -f "$EXPERIMENT_PATH/${EXPERIMENT_NAME}.log"

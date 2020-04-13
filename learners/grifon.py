@@ -85,7 +85,7 @@ class GRIFON:
             prediction = torch.matmul(query_embeddings, support_prototypes.transpose(dim0=0, dim1=1))
             prediction = self.model.temp * prediction
             train_labels_oh = torch.nn.functional.one_hot(train_labels, self.args.n_ways)
-            prediction = torch.matmul(prediction, train_labels_oh.t().float())
+            prediction = torch.matmul(prediction, train_labels_oh.float())
             # prediction = torch.gather(prediction, dim=1, index=train_labels)
 
             test_loss = F.cross_entropy(prediction, test_labels)
@@ -97,6 +97,10 @@ class GRIFON:
             # Compute metrics
             meta_batch_loss += test_loss.detach()
             meta_batch_accuracy += test_accuracy
+
+            # Propagate task loss through inner loop rollup
+            if training:
+                test_loss.backward()
 
         return meta_batch_loss, meta_batch_accuracy
 
