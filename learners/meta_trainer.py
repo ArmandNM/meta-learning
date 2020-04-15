@@ -221,6 +221,10 @@ class MetaTrainer:
                     # Save Tensorboard logs
                     self.writer.add_scalar(f'Losses/{phase}_loss', log_loss, train_it)
                     self.writer.add_scalar(f'Accuracies/{phase}_accuracy', log_accuracy, train_it)
+                else:
+                    best_ckpt_msg = "(best ckpt)" if checkpoint is "best_checkpoint" else ""
+                    self.writer.add_text("Report", f"[TEST] Iter {train_it} Accuracy: {log_accuracy :.2f}% "
+                                                   f"{best_ckpt_msg}", train_it)
 
                 # Save combined logs
                 # self.writer.add_scalars('Losses/all_losses', {
