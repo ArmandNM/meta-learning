@@ -14,12 +14,20 @@ from learners.meta_trainer import MetaTrainer
 
 def start_experiment():
     # Setting benchmark = True should improve performance for constant shape input
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.benchmark = True
 
     meta_trainer = MetaTrainer()
-    meta_trainer.train(training=True)
-    # Test using best checkpoint saved
-    meta_trainer.test(resume=True)
+
+    if meta_trainer.args.test_only:
+        print("Skipping training.")
+        checkpoint_name = meta_trainer.args.checkpoint_name if meta_trainer.args.checkpoint_name else "best_checkpoint"
+        meta_trainer.test(checkpoint=checkpoint_name)
+    else:
+        meta_trainer.train(training=True, checkpoint=meta_trainer.args.checkpoint_name)
+        # Test using best checkpoint saved
+        meta_trainer.test(checkpoint="best_checkpoint")
+
+    # Close summary writer
     meta_trainer.writer.close()
 
 

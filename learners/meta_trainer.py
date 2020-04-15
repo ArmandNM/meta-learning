@@ -26,7 +26,10 @@ class MetaTrainer:
         self.argparser.add_argument('--meta_iters', type=int, help='num of meta iterations', default=60000)
         self.argparser.add_argument('--meta_lr', type=float, help='meta learning rate', default=1e-3)
         self.argparser.add_argument('--dataset', type=str, help='meta dataset to use', default='miniimagenet')
-        self.argparser.add_argument('--experiment_name', type=str, help='name of current experiment', default='test')
+
+        # TODO: try to convert args to bool instead of string
+        self.argparser.add_argument('--test', dest='test_only', action='store_true')
+        self.argparser.add_argument('--checkpoint_name', type=str, help='checkpoint used when resume', default=None)
 
         self.argparser.add_argument('--train_print_step', type=int,
                                     help='number of meta iterations before printing metrics', default=10)
@@ -39,11 +42,12 @@ class MetaTrainer:
         self.argparser.add_argument('--checkpoint_step', type=int,
                                     help='number of meta iterations before saving checkpoint', default=500)
 
-
         # Parse general meta-learning args. Line arguments overwrite config file arguments
         self.args, additional_args_file = self.argparser.parse_known_args(['@config'])
         self.args, additional_args_command_line = self.argparser.parse_known_args(namespace=self.args)
         additional_args = additional_args_file + additional_args_command_line
+
+        self.experiment_root = os.path.abspath(os.path.join(os.path.realpath(__file__), os.pardir, os.pardir, os.pardir))
 
         # Selected meta-learner constructor
         learner_constructor = None
@@ -94,7 +98,9 @@ class MetaTrainer:
         self.best_score = None
 
         # Initialize summary writer to save logs during training that can be visualized in Tensorboard
-        self.writer = SummaryWriter(f'experiments/{self.args.experiment_name}/{self.args.experiment_name}')
+        if not os.path.isdir(os.path.join(self.experiment_root, "summaries")):
+            os.makedirs(os.path.join(self.experiment_root, "summaries"))
+        self.writer = SummaryWriter(os.path.join(self.experiment_root, "summaries"))
         # Add layout for combined metrics on custom scalars page
         layout = {
             'Accuracies': {
@@ -127,7 +133,7 @@ class MetaTrainer:
         print(f'All model params [{len(all_params)}]:\n' + '\n'.join(all_params))
         print('--------------------------------------------------------------------------------')
 
-    def train(self, training=False, validation=False, testing=False, resume=False, train_iter=None):
+    def train(self, training=False, validation=False, testing=False, checkpoint=None, train_iter=1):
         # Check that exactly one of training/validation/testing parameters is set to True
         assert int(training) + int(validation) + int(testing) == 1
 
@@ -142,19 +148,20 @@ class MetaTrainer:
             dataloader = self.val_dataloader
         elif testing:
             num_meta_iterations = self.args.val_num_iters
-            if resume:
-                self.load_checkpoint(checkpoint_name='best_checkpoint')
+            if checkpoint is not None:
                 num_meta_iterations = self.args.test_num_iters
-                train_iter = self.args.meta_iters + 1
             dataloader = self.test_dataloader
         assert dataloader is not None
         assert num_meta_iterations is not None
+
+        if checkpoint is not None:
+            train_iter = self.load_checkpoint(checkpoint_name=checkpoint) + 1
 
         running_loss = 0.0
         running_accuracy = 0.0
         start = time()
 
-        for it, meta_batch in enumerate(dataloader, 1):
+        for it, meta_batch in enumerate(dataloader, train_iter if training else 1):
             # Stop conditions
             if it > num_meta_iterations:
                 break
@@ -210,9 +217,10 @@ class MetaTrainer:
                       f'accuracy: {log_accuracy :.2f}% '
                       f'speed: {print_step / (end - start) :.2f} iter/s')
 
-                # Save Tensorboard logs
-                self.writer.add_scalar(f'Losses/{phase}_loss', log_loss, train_it)
-                self.writer.add_scalar(f'Accuracies/{phase}_accuracy', log_accuracy, train_it)
+                if not (testing and checkpoint):
+                    # Save Tensorboard logs
+                    self.writer.add_scalar(f'Losses/{phase}_loss', log_loss, train_it)
+                    self.writer.add_scalar(f'Accuracies/{phase}_accuracy', log_accuracy, train_it)
 
                 # Save combined logs
                 # self.writer.add_scalars('Losses/all_losses', {
@@ -237,7 +245,7 @@ class MetaTrainer:
             if training and it > int(0.0000005 * self.args.meta_iters) and it % self.args.val_print_step == 0:
                 self.learner.set_eval_mode()
                 self.eval(train_iter=it)
-                self.test(train_iter=it, resume=False)
+                self.test(train_iter=it)
                 # Model must be set back to training mode after an evaluation
                 # [TODO] implement and set_train_mode() for the learner instead of accessing member
                 self.learner.set_train_mode()
@@ -246,35 +254,42 @@ class MetaTrainer:
             # Save checkpoint of model and optimizer
             if training and it % self.args.checkpoint_step == 0:
                 self.save_checkpoint(it=it, checkpoint_name=f'checkpoint_{it}')
+                self.save_checkpoint(it=it, checkpoint_name=f'last_checkpoint')
 
     def eval(self, train_iter=None):
         self.learner.set_eval_mode()
         self.train(validation=True, train_iter=train_iter)
 
-    def test(self, train_iter=None, resume=False):
+    def test(self, train_iter=None, checkpoint=None):
         self.learner.set_train_mode()
-        self.train(testing=True, train_iter=train_iter, resume=resume)
+        self.train(testing=True, train_iter=train_iter, checkpoint=checkpoint)
 
     def save_checkpoint(self, it, checkpoint_name):
-        if not os.path.isdir(f'experiments/{self.args.experiment_name}'):
-            os.makedirs(f'experiments/{self.args.experiment_name}')
+        checkpoints_path = os.path.join(self.experiment_root, "checkpoints")
+        if not os.path.isdir(checkpoints_path):
+            os.makedirs(checkpoints_path)
         print(f'Saving {checkpoint_name} ...')
         torch.save({
             'iteration': it,
+            'best_score': self.best_score,
             'learner_state_dict': self.learner.get_state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict()
-        }, f'experiments/{self.args.experiment_name}/{checkpoint_name}')
+        }, os.path.join(checkpoints_path, checkpoint_name))
 
     def load_checkpoint(self, checkpoint_name):
-        checkpoint = torch.load(f'experiments/{self.args.experiment_name}/{checkpoint_name}')
-        print(f'Loading {checkpoint_name} from iteration {checkpoint["iteration"]} ...')
+        checkpoint = torch.load(os.path.join(self.experiment_root, "checkpoints", checkpoint_name))
+        print(f'Loading {checkpoint_name} from iteration {checkpoint["iteration"]} '
+              f'having best accuracy: {checkpoint["best_score"] :.2f} ...')
+        self.best_score = checkpoint["best_score"]
         self.learner.load_checkpoint(state_dict=checkpoint['learner_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        return checkpoint["iteration"]
 
 
 if __name__ == '__main__':
     # Setting benchmark = True should improve performance for constant shape input
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.benchmark = True
     meta_trainer = MetaTrainer()
     meta_trainer.train(training=True)
-    meta_trainer.test(resume=True)
+    meta_trainer.test(checkpoint="best_checkpoint")

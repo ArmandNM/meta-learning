@@ -3,7 +3,7 @@
 # First argument represents the name of the experiment. If not given, use default
 if [ -z "$1" ]
   then
-    EXPERIMENT_NAME="grifon_v1"
+    EXPERIMENT_NAME="tmp"
   else
     EXPERIMENT_NAME=$1
 fi
@@ -19,13 +19,10 @@ mkdir "experiments/${EXPERIMENT_NAME}"
 # Clone project directory
 echo "Cloning project to experiment directory"
 mkdir "$EXPERIMENT_PATH/project/" 2> /dev/null
-#shopt -s extglob
-#cp -r !("experiments", "datasets") "$EXPERIMENT_PATH/project/"
-rsync -a ./ "$EXPERIMENT_PATH/project/" --exclude "experiments" --exclude "datasets"
-mkdir "$EXPERIMENT_PATH/project/experiments"
+rsync -a ./ "$EXPERIMENT_PATH/project/" --exclude "experiments" --exclude "datasets" --exclude ".git" --exclude ".idea"
 ln -s "$(pwd)/datasets" "$(pwd)/$EXPERIMENT_PATH/project/datasets"
 echo "Starting experiment: $EXPERIMENT_NAME"
 
 # Start experiment in the background
-CUDA_VISIBLE_DEVICES=0 nohup python main.py --experiment_name="${EXPERIMENT_NAME}" > "$EXPERIMENT_PATH/${EXPERIMENT_NAME}.log" 2>&1 &
-tail -f "$EXPERIMENT_PATH/${EXPERIMENT_NAME}.log"
+CUDA_VISIBLE_DEVICES=0 nohup python "$EXPERIMENT_PATH/project/main.py" > "$EXPERIMENT_PATH/logs" 2>&1 &
+tail -f "$EXPERIMENT_PATH/logs"
