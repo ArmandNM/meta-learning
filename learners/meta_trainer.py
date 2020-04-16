@@ -1,6 +1,7 @@
 import torch
 import argparse
 import os
+import random
 
 from learners.maml import MAML
 from learners.cavia import CAVIA
@@ -14,7 +15,7 @@ from time import time
 
 
 class MetaTrainer:
-    def __init__(self):
+    def __init__(self, test_seed=None):
         self.argparser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 
         self.argparser.add_argument('--n_ways', type=int, help='num of classes', default=5)
@@ -82,7 +83,11 @@ class MetaTrainer:
 
         test_dataset = dataset('datasets', ways=self.args.n_ways, shots=self.args.k_spt, test_shots=self.args.k_qry,
                                meta_test=True, download=True)
-        self.test_dataloader = BatchMetaDataLoader(test_dataset, batch_size=self.args.tasks_num, num_workers=4)
+        if test_seed is None:
+            self.test_dataloader = BatchMetaDataLoader(test_dataset, batch_size=self.args.tasks_num, num_workers=4)
+        else:
+            self.test_dataloader = BatchMetaDataLoader(test_dataset, batch_size=self.args.tasks_num, num_workers=4,
+                                                       worker_init_fn=random.seed(test_seed))
 
         # Create meta-learner object
         self.learner = learner_constructor(args=self.args)
@@ -222,7 +227,7 @@ class MetaTrainer:
                     self.writer.add_scalar(f'Losses/{phase}_loss', log_loss, train_it)
                     self.writer.add_scalar(f'Accuracies/{phase}_accuracy', log_accuracy, train_it)
                 else:
-                    best_ckpt_msg = "(best ckpt)" if checkpoint is "best_checkpoint" else ""
+                    best_ckpt_msg = "(best ckpt)" if checkpoint == "best_checkpoint" else ""
                     self.writer.add_text("Report", f"[TEST] Iter {train_it} Accuracy: {log_accuracy :.2f}% "
                                                    f"{best_ckpt_msg}", train_it)
 

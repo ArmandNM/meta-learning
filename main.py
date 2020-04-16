@@ -20,11 +20,14 @@ def start_experiment():
 
     if meta_trainer.args.test_only:
         print("Skipping training.")
+        # Reinitialize with given seed to make testing deterministic
+        meta_trainer = MetaTrainer(test_seed=42)
         checkpoint_name = meta_trainer.args.checkpoint_name if meta_trainer.args.checkpoint_name else "best_checkpoint"
         meta_trainer.test(checkpoint=checkpoint_name)
     else:
         meta_trainer.train(training=True, checkpoint=meta_trainer.args.checkpoint_name)
         # Test using best checkpoint saved
+        meta_trainer = MetaTrainer(test_seed=42)
         meta_trainer.test(checkpoint="best_checkpoint")
 
     # Close summary writer
