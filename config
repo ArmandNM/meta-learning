@@ -17,5 +17,5 @@
 --inner_steps_train=2
 --inner_steps_test=2
 --inner_lr=1e-2
---model=meta_conv_support
+--model=resnet12
 --num_filters=32

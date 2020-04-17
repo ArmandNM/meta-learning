@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from models.metaconv import MetaConv
 from models.metaconv_contextual import MetaConvContextual
 from models.metaconv_support import MetaConvSupport
-
+from models.resnet12 import resnet12
 
 class GRIFON:
     def __init__(self, args):
@@ -24,6 +24,9 @@ class GRIFON:
             self.model = MetaConvSupport(out_channels=self.args.n_ways, k_spt=self.args.k_spt,
                                          hidden_size=self.args.num_filters)
             self.model.cuda()
+        if args.model == "resnet12":
+            self.model = resnet12(n_ways=self.args.n_ways, k_spt=self.args.k_spt)
+            self.model.cuda()
         assert self.model is not None
 
         self.best_model = None
@@ -37,7 +40,8 @@ class GRIFON:
         argparser.add_argument('--num_filters', type=int, help='number of conv filters', default=32)
 
     def get_inner_trainable_params(self):
-        return self.model.fc_update.parameters()
+        return self.model.parameters()
+        # return self.model.fc_update.parameters()
 
     def get_outer_trainable_params(self):
         return self.model.parameters()
@@ -62,7 +66,7 @@ class GRIFON:
         meta_train_inputs, meta_train_labels = meta_batch["train"]
         meta_test_inputs, meta_test_labels = meta_batch["test"]
 
-        inner_optimizer = torch.optim.SGD(self.get_inner_trainable_params(), lr=self.args.inner_lr)
+        # inner_optimizer = torch.optim.SGD(self.get_inner_trainable_params(), lr=self.args.inner_lr)
 
         for task_idx in range(self.args.tasks_num):
             # Extract examples and labels for current task
