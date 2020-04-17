@@ -18,35 +18,55 @@ def norm_layer(planes):
 
 class Block(nn.Module):
 
-    def __init__(self, inplanes, planes, downsample):
+    def __init__(self, inplanes, planes, downsample, n_ways, k_spt, graphs):
         super().__init__()
+
+        self.graphs = graphs
+        self.n_ways = n_ways
+        self.k_spt = k_spt
+        self.planes = planes
 
         self.relu = nn.LeakyReLU(0.1)
 
         self.conv1 = conv3x3(inplanes, planes)
         self.bn1 = norm_layer(planes)
+        self.cached_support_features1 = None
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = norm_layer(planes)
+        self.cached_support_features2 = None
         self.conv3 = conv3x3(planes, planes)
         self.bn3 = norm_layer(planes)
+        self.cached_support_features3 = None
 
         self.downsample = downsample
 
         self.maxpool = nn.MaxPool2d(2)
 
-        self.cached_support_features = None
+        self.cached_support_features4 = None
 
     def forward(self, x, is_support=False):
         out = self.conv1(x)
         out = self.bn1(out)
+        if is_support:
+            self.cached_support_features1 = out.detach()
+        if self.graphs[0] is not None:
+            out = self.graphs[0](out, proto_spt=self.aggregate_features(self.cached_support_features1))
         out = self.relu(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
+        if is_support:
+            self.cached_support_features2 = out.detach()
+        if self.graphs[1] is not None:
+            out = self.graphs[1](out, proto_spt=self.aggregate_features(self.cached_support_features2))
         out = self.relu(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
+        if is_support:
+            self.cached_support_features3 = out.detach()
+        if self.graphs[2] is not None:
+            out = self.graphs[2](out, proto_spt=self.aggregate_features(self.cached_support_features3))
 
         identity = self.downsample(x)
 
@@ -56,9 +76,21 @@ class Block(nn.Module):
         out = self.maxpool(out)
 
         if is_support:
-            self.cached_support_features = out.detach()
+            self.cached_support_features4 = out.detach()
+        if self.graphs[3] is not None:
+            out = self.graphs[3](out, proto_spt=self.aggregate_features(self.cached_support_features4))
 
         return out
+
+    def aggregate_features(self, intermediate_features):
+        # Compute global average pooling
+        intermediate_features = F.avg_pool2d(intermediate_features.detach(), intermediate_features.size()[-1])
+        # Separate features by class changing shape to: [N, K, ...]
+        # TODO: hidden size can be determined from intermediate_features shape, remove it from method parameters
+        intermediate_features = intermediate_features.view(self.n_ways, self.k_spt, self.planes)
+        # Average over all examples in the same class
+        intermediate_features = intermediate_features.mean(axis=1)
+        return intermediate_features.detach()
 
 
 class AttentionModuleV2(torch.nn.Module):
@@ -160,10 +192,11 @@ class AttentionModuleV2(torch.nn.Module):
         # Compute film params based on current x and context
         film_params = self.fc_update(torch.cat([proto_x, aggregated_messages], dim=-1))
 
-        gamma = film_params[:, 0, :self.hidden_size].unsqueeze(dim=2).unsqueeze(dim=3)
-        beta = film_params[:, 0, self.hidden_size:].unsqueeze(-1).unsqueeze(-1)
+        gamma = film_params[:, 0, :self.hidden_size].unsqueeze(dim=2).unsqueeze(dim=3).unsqueeze(dim=-1)
+        beta = film_params[:, 0, self.hidden_size:].unsqueeze(-1).unsqueeze(-1).unsqueeze(dim=-1)
 
-        x = gamma * x + beta
+        x = gamma * x.unsqueeze(dim=-1) + beta
+        x = x.squeeze(dim=-1)
 
         return x
 
@@ -178,15 +211,16 @@ class ResNet12(nn.Module):
         self.k_spt = k_spt
         self.inplanes = 3
 
-        self.layer1 = self._make_layer(channels[0])
-        self.layer2 = self._make_layer(channels[1])
-        self.layer3 = self._make_layer(channels[2])
-        self.layer4 = self._make_layer(channels[3])
-
         self.attention1 = AttentionModuleV2(hidden_size=channels[0])
         self.attention2 = AttentionModuleV2(hidden_size=channels[1])
         self.attention3 = AttentionModuleV2(hidden_size=channels[2])
         self.attention4 = AttentionModuleV2(hidden_size=channels[3])
+
+        self.layer1 = self._make_layer(channels[0], n_ways, k_spt, [None, None, None, None])
+        self.layer2 = self._make_layer(channels[1], n_ways, k_spt, [None, None, None, None])
+        self.layer3 = self._make_layer(channels[2], n_ways, k_spt, [self.attention3, self.attention3,
+                                                                    self.attention3, self.attention3])
+        self.layer4 = self._make_layer(channels[3], n_ways, k_spt, [None, None, None, None])
 
         self.out_dim = channels[3]
 
@@ -200,12 +234,12 @@ class ResNet12(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def _make_layer(self, planes):
+    def _make_layer(self, planes, n_ways, k_spt, graphs):
         downsample = nn.Sequential(
             conv1x1(self.inplanes, planes),
             norm_layer(planes),
         )
-        block = Block(self.inplanes, planes, downsample)
+        block = Block(self.inplanes, planes, downsample, n_ways, k_spt, graphs)
         self.inplanes = planes
         return block
 
@@ -213,21 +247,9 @@ class ResNet12(nn.Module):
         x = self.layer1(x, is_support=is_support)
         x = self.layer2(x, is_support=is_support)
         x = self.layer3(x, is_support=is_support)
-        x = self.attention3.forward(x, proto_spt=self.aggregate_features(self.layer3.cached_support_features,
-                                                                         self.channels[3 - 1]))
         x = self.layer4(x, is_support=is_support)
         x = x.view(x.shape[0], x.shape[1], -1).mean(dim=2)
         return x
-
-    def aggregate_features(self, intermediate_features, hidden_size):
-        # Compute global average pooling
-        intermediate_features = F.avg_pool2d(intermediate_features.detach(), intermediate_features.size()[-1])
-        # Separate features by class changing shape to: [N, K, ...]
-        # TODO: hidden size can be determined from intermediate_features shape, remove it from method parameters
-        intermediate_features = intermediate_features.view(self.n_ways, self.k_spt, hidden_size)
-        # Average over all examples in the same class
-        intermediate_features = intermediate_features.mean(axis=1)
-        return intermediate_features.detach()
 
 
 # @register('resnet12')
