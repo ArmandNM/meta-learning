@@ -125,9 +125,9 @@ class MetaTrainer:
         inner_params = list(filter(lambda named_param: named_param[1].data_ptr() in inner_params, all_params))
         outer_params = list(filter(lambda named_param: named_param[1].data_ptr() in outer_params, all_params))
 
-        all_params = list(map(lambda named_param: named_param[0], all_params))
-        inner_params = list(map(lambda named_param: named_param[0], inner_params))
-        outer_params = list(map(lambda named_param: named_param[0], outer_params))
+        all_params = list(map(lambda named_param: str((named_param[0], named_param[1].shape)), all_params))
+        inner_params = list(map(lambda named_param: str((named_param[0], named_param[1].shape)), inner_params))
+        outer_params = list(map(lambda named_param: str((named_param[0], named_param[1].shape)), outer_params))
 
         print('PARAMETERS:')
         print('--------------------------------------------------------------------------------')
