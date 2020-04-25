@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
+import pdb
 
 def conv3x3(in_planes, out_planes):
     return nn.Conv2d(in_planes, out_planes, 3, padding=1, bias=False)
@@ -141,6 +141,12 @@ class AttentionModuleV2(torch.nn.Module):
         else:
             self.fc_spt_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
 
+
+        self.gamma_scale_gate = torch.nn.Parameter(torch.zeros(size=[1,hidden_size,1,1,1], requires_grad=True))
+        self.gamma_bias_gate = torch.nn.Parameter(torch.ones(size=[1,hidden_size,1,1,1], requires_grad=True))
+        self.beta_scale_gate = torch.nn.Parameter(torch.zeros(size=[1,hidden_size,1,1,1], requires_grad=True))
+
+
     def forward(self, x, proto_spt):
         proto_x = x.mean(axis=3).mean(axis=2)
 
@@ -195,6 +201,10 @@ class AttentionModuleV2(torch.nn.Module):
         gamma = film_params[:, 0, :self.hidden_size].unsqueeze(dim=2).unsqueeze(dim=3).unsqueeze(dim=-1)
         beta = film_params[:, 0, self.hidden_size:].unsqueeze(-1).unsqueeze(-1).unsqueeze(dim=-1)
 
+        # init gamma with ones and beta with zeros
+        gamma = gamma * self.gamma_scale_gate + self.gamma_bias_gate
+        beta  = beta * self.beta_scale_gate
+
         x = gamma * x.unsqueeze(dim=-1) + beta
         x = x.squeeze(dim=-1)
 
@@ -213,22 +223,22 @@ class ResNet12(nn.Module):
 
         self.attention1 = AttentionModuleV2(hidden_size=channels[0])
 
-        self.attention2 = AttentionModuleV2(hidden_size=channels[1])
-        # self.attention2_2 = AttentionModuleV2(hidden_size=channels[1])
-        # self.attention2_3 = AttentionModuleV2(hidden_size=channels[1])
+        self.attention2_1 = AttentionModuleV2(hidden_size=channels[1])
+        self.attention2_2 = AttentionModuleV2(hidden_size=channels[1])
+        self.attention2_3 = AttentionModuleV2(hidden_size=channels[1])
 
-        self.attention3 = AttentionModuleV2(hidden_size=channels[2])
-        # self.attention3_2 = AttentionModuleV2(hidden_size=channels[2])
-        # self.attention3_3 = AttentionModuleV2(hidden_size=channels[2])
+        self.attention3_1 = AttentionModuleV2(hidden_size=channels[2])
+        self.attention3_2 = AttentionModuleV2(hidden_size=channels[2])
+        self.attention3_3 = AttentionModuleV2(hidden_size=channels[2])
         
-        self.attention4 = AttentionModuleV2(hidden_size=channels[3])
-        # self.attention4_2 = AttentionModuleV2(hidden_size=channels[3])
-        # self.attention4_3 = AttentionModuleV2(hidden_size=channels[3])
+        self.attention4_1 = AttentionModuleV2(hidden_size=channels[3])
+        self.attention4_2 = AttentionModuleV2(hidden_size=channels[3])
+        self.attention4_3 = AttentionModuleV2(hidden_size=channels[3])
 
         self.layer1 = self._make_layer(channels[0], n_ways, k_spt, [None, None, None, None])
-        self.layer2 = self._make_layer(channels[1], n_ways, k_spt, [None, None, self.attention2, None])
-        self.layer3 = self._make_layer(channels[2], n_ways, k_spt, [None, None, self.attention3, None])
-        self.layer4 = self._make_layer(channels[3], n_ways, k_spt, [None, None, self.attention4, None])
+        self.layer2 = self._make_layer(channels[1], n_ways, k_spt, [self.attention2_1, self.attention2_2, self.attention2_3, None])
+        self.layer3 = self._make_layer(channels[2], n_ways, k_spt, [self.attention3_1, self.attention3_2, self.attention3_3, None])
+        self.layer4 = self._make_layer(channels[3], n_ways, k_spt, [self.attention4_1, self.attention4_2, self.attention4_3, None])
 
         self.out_dim = channels[3]
 
