@@ -8,6 +8,9 @@ from models.metaconv import MetaConv
 from models.metaconv_contextual import MetaConvContextual
 from models.metaconv_support import MetaConvSupport
 from models.resnet12 import resnet12
+from models.resnet12 import resnet12_narrow128
+
+
 
 class GRIFON:
     def __init__(self, args):
@@ -26,6 +29,9 @@ class GRIFON:
             self.model.cuda()
         if args.model == "resnet12":
             self.model = resnet12(n_ways=self.args.n_ways, k_spt=self.args.k_spt)
+            self.model.cuda()
+        if args.model == "resnet12_narrow128":
+            self.model = resnet12_narrow128(n_ways=self.args.n_ways, k_spt=self.args.k_spt)
             self.model.cuda()
         assert self.model is not None
 

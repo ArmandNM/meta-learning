@@ -212,15 +212,23 @@ class ResNet12(nn.Module):
         self.inplanes = 3
 
         self.attention1 = AttentionModuleV2(hidden_size=channels[0])
+
         self.attention2 = AttentionModuleV2(hidden_size=channels[1])
+        # self.attention2_2 = AttentionModuleV2(hidden_size=channels[1])
+        # self.attention2_3 = AttentionModuleV2(hidden_size=channels[1])
+
         self.attention3 = AttentionModuleV2(hidden_size=channels[2])
+        # self.attention3_2 = AttentionModuleV2(hidden_size=channels[2])
+        # self.attention3_3 = AttentionModuleV2(hidden_size=channels[2])
+        
         self.attention4 = AttentionModuleV2(hidden_size=channels[3])
+        # self.attention4_2 = AttentionModuleV2(hidden_size=channels[3])
+        # self.attention4_3 = AttentionModuleV2(hidden_size=channels[3])
 
         self.layer1 = self._make_layer(channels[0], n_ways, k_spt, [None, None, None, None])
-        self.layer2 = self._make_layer(channels[1], n_ways, k_spt, [None, None, None, None])
-        self.layer3 = self._make_layer(channels[2], n_ways, k_spt, [self.attention3, self.attention3,
-                                                                    self.attention3, self.attention3])
-        self.layer4 = self._make_layer(channels[3], n_ways, k_spt, [None, None, None, None])
+        self.layer2 = self._make_layer(channels[1], n_ways, k_spt, [None, None, self.attention2, None])
+        self.layer3 = self._make_layer(channels[2], n_ways, k_spt, [None, None, self.attention3, None])
+        self.layer4 = self._make_layer(channels[3], n_ways, k_spt, [None, None, self.attention4, None])
 
         self.out_dim = channels[3]
 
@@ -255,6 +263,11 @@ class ResNet12(nn.Module):
 # @register('resnet12')
 def resnet12(n_ways, k_spt):
     return ResNet12(channels=[64, 128, 256, 512], n_ways=n_ways, k_spt=k_spt)
+
+# @register('resnet12-narrow128')
+def resnet12_narrow128(n_ways, k_spt):
+    return ResNet12(channels=[64, 128, 128, 128], n_ways=n_ways, k_spt=k_spt)
+
 
 
 # @register('resnet12-wide')
