@@ -93,9 +93,77 @@ class Block(nn.Module):
         return intermediate_features.detach()
 
 
+class AttentionModule(torch.nn.Module):
+    def __init__(self, hidden_size, fc_x_query=None, fc_spt_key=None, fc_spt_value=None, fc_update=None,
+                 gamma_scale_gate=None, gamma_bias_gate=None, beta_scale_gate=None):
+        # TODO: Create different modules to separate attention from film aggregation
+        super().__init__()
+        self.hidden_size = hidden_size
+
+        # Create new layers if None are given to reuse
+        if fc_x_query is not None:
+            self.fc_x_query = fc_x_query
+        else:
+            self.fc_x_query = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_spt_key is not None:
+            self.fc_spt_key = fc_spt_key
+        else:
+            self.fc_spt_key = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_spt_value is not None:
+            self.fc_spt_value = fc_spt_value
+        else:
+            self.fc_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
+
+        if fc_update is not None:
+            self.fc_update = fc_update
+        else:
+            self.fc_update = torch.nn.Linear(2 * hidden_size, 2 * hidden_size, bias=True)
+
+        if gamma_scale_gate is not None:
+            self.gamma_scale_gate = gamma_scale_gate
+        else:
+            self.gamma_scale_gate = torch.nn.Parameter(torch.zeros(size=[1, hidden_size, 1, 1, 1], requires_grad=True))
+
+        if gamma_bias_gate is not None:
+            self.gamma_bias_gate = gamma_bias_gate
+        else:
+            self.gamma_bias_gate = torch.nn.Parameter(torch.ones(size=[1, hidden_size, 1, 1, 1], requires_grad=True))
+
+        if beta_scale_gate is not None:
+            self.beta_scale_gate = beta_scale_gate
+        else:
+            self.beta_scale_gate = torch.nn.Parameter(torch.zeros(size=[1, hidden_size, 1, 1, 1], requires_grad=True))
+
+    def forward(self, x, proto_spt):
+        proto_x = x.mean(axis=3).mean(axis=2)
+
+        # Self-attention
+        query = self.fc_x_query(proto_x).unsqueeze(dim=1)
+        key = self.fc_spt_key(proto_spt).unsqueeze(dim=0)
+        value = self.fc_spt_value(proto_spt).unsqueeze(dim=0)
+
+        key_t = torch.transpose(key, dim0=1, dim1=2)
+        correlation = torch.matmul(query, key_t) / math.sqrt(self.hidden_size)
+        correlation = F.softmax(correlation, dim=-1)
+        aggregated_messages = torch.matmul(correlation, value)[:, 0, :]
+
+        # Compute film params based on current x and context
+        film_params = self.fc_update(torch.cat([proto_x, aggregated_messages], dim=-1))
+
+        # film_params = self.film_fc(self.support_params)
+        gamma = film_params[:, :self.hidden_size].unsqueeze(dim=2).unsqueeze(dim=3)
+        beta = film_params[:, self.hidden_size:].unsqueeze(-1).unsqueeze(-1)
+
+        x = gamma * x + beta
+        return x
+
+
 class AttentionModuleV2(torch.nn.Module):
     def __init__(self, hidden_size, fc_x_query=None, fc_spt_key=None, fc_spt_value=None, fc_x_update=None, fc_update=None,
-                 fc_spt_spt_query=None, fc_spt_spt_key=None, fc_spt_spt_value=None):
+                 fc_spt_spt_query=None, fc_spt_spt_key=None, fc_spt_spt_value=None,
+                 gamma_scale_gate=None, gamma_bias_gate=None, beta_scale_gate=None):
         # TODO: Create different modules to separate attention from film aggregation
         super().__init__()
         self.hidden_size = hidden_size
@@ -141,11 +209,20 @@ class AttentionModuleV2(torch.nn.Module):
         else:
             self.fc_spt_spt_value = torch.nn.Linear(hidden_size, hidden_size, bias=False)
 
+        if gamma_scale_gate is not None:
+            self.gamma_scale_gate = gamma_scale_gate
+        else:
+            self.gamma_scale_gate = torch.nn.Parameter(torch.zeros(size=[1, hidden_size, 1, 1, 1], requires_grad=True))
 
-        self.gamma_scale_gate = torch.nn.Parameter(torch.zeros(size=[1,hidden_size,1,1,1], requires_grad=True))
-        self.gamma_bias_gate = torch.nn.Parameter(torch.ones(size=[1,hidden_size,1,1,1], requires_grad=True))
-        self.beta_scale_gate = torch.nn.Parameter(torch.zeros(size=[1,hidden_size,1,1,1], requires_grad=True))
+        if gamma_bias_gate is not None:
+            self.gamma_bias_gate = gamma_bias_gate
+        else:
+            self.gamma_bias_gate = torch.nn.Parameter(torch.ones(size=[1, hidden_size, 1, 1, 1], requires_grad=True))
 
+        if beta_scale_gate is not None:
+            self.beta_scale_gate = beta_scale_gate
+        else:
+            self.beta_scale_gate = torch.nn.Parameter(torch.zeros(size=[1, hidden_size, 1, 1, 1], requires_grad=True))
 
     def forward(self, x, proto_spt):
         proto_x = x.mean(axis=3).mean(axis=2)
@@ -224,16 +301,48 @@ class ResNet12(nn.Module):
         self.attention1 = AttentionModuleV2(hidden_size=channels[0])
 
         self.attention2_1 = AttentionModuleV2(hidden_size=channels[1])
-        self.attention2_2 = AttentionModuleV2(hidden_size=channels[1])
-        self.attention2_3 = AttentionModuleV2(hidden_size=channels[1])
+        self.attention2_2 = AttentionModuleV2(hidden_size=channels[1], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
+        self.attention2_3 = AttentionModuleV2(hidden_size=channels[1], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
 
-        self.attention3_1 = AttentionModuleV2(hidden_size=channels[2])
-        self.attention3_2 = AttentionModuleV2(hidden_size=channels[2])
-        self.attention3_3 = AttentionModuleV2(hidden_size=channels[2])
+        self.attention3_1 = AttentionModuleV2(hidden_size=channels[2], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
+        self.attention3_2 = AttentionModuleV2(hidden_size=channels[2], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
+        self.attention3_3 = AttentionModuleV2(hidden_size=channels[2], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
         
-        self.attention4_1 = AttentionModuleV2(hidden_size=channels[3])
-        self.attention4_2 = AttentionModuleV2(hidden_size=channels[3])
-        self.attention4_3 = AttentionModuleV2(hidden_size=channels[3])
+        self.attention4_1 = AttentionModuleV2(hidden_size=channels[3], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
+        self.attention4_2 = AttentionModuleV2(hidden_size=channels[3], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
+        self.attention4_3 = AttentionModuleV2(hidden_size=channels[3], fc_x_query=self.attention2_1.fc_x_query,
+                                              fc_spt_key=self.attention2_1.fc_spt_key, fc_spt_value=self.attention2_1.fc_spt_value,
+                                              fc_x_update=self.attention2_1.fc_x_update, fc_update=self.attention2_1.fc_update,
+                                              fc_spt_spt_query=self.attention2_1.fc_spt_spt_query, fc_spt_spt_key=self.attention2_1.fc_spt_spt_key,
+                                              fc_spt_spt_value=self.attention2_1.fc_spt_spt_value)
 
         self.layer1 = self._make_layer(channels[0], n_ways, k_spt, [None, None, None, None])
         self.layer2 = self._make_layer(channels[1], n_ways, k_spt, [self.attention2_1, self.attention2_2, self.attention2_3, None])
