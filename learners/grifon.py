@@ -105,14 +105,14 @@ class GRIFON:
             test_accuracy = (test_predictions == test_labels).sum().item() / test_labels.size(0)
 
             # Compute metrics
-            meta_batch_loss += test_loss.detach()
+            meta_batch_loss += test_loss.detach().item()
             meta_batch_accuracy += test_accuracy
 
             # Propagate task loss through inner loop rollup
             if training:
                 test_loss.backward()
 
-        return meta_batch_loss, meta_batch_accuracy
+        return meta_batch_loss / self.args.tasks_num, meta_batch_accuracy / self.args.tasks_num
 
     def get_state_dict(self):
         return {'model_state_dict': self.model.state_dict()}

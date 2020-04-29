@@ -164,6 +164,8 @@ class MetaTrainer:
 
         running_loss = 0.0
         running_accuracy = 0.0
+        accuracies = []
+        losses = []
         start = time()
 
         for it, meta_batch in enumerate(dataloader, train_iter if training else 1):
@@ -187,7 +189,9 @@ class MetaTrainer:
 
             # Update running metrics
             running_loss += loss
+            losses.append(loss)
             running_accuracy += accuracy
+            accuracies.append(accuracy)
 
             # Update learnable parameters
             if training:
@@ -214,12 +218,16 @@ class MetaTrainer:
                     train_it = train_iter
                 assert print_step is not None and phase is not None and train_it is not None
 
-                log_loss = running_loss / (self.args.tasks_num * print_step)
-                log_accuracy = 100 * running_accuracy / (self.args.tasks_num * print_step)
+                # log_loss = running_loss / (self.args.tasks_num * print_step)
+                # log_accuracy = 100 * running_accuracy / (self.args.tasks_num * print_step)
+                log_loss = np.mean(losses)
+                log_accuracy = 100 * np.mean(accuracies)
+                log_accuracy_std = 100 * np.std(accuracies)
+                log_accuracry_ci95 = 1.96 * log_accuracy_std / np.sqrt(print_step)
 
                 # Print console logs
                 print(f'[{str.upper(phase)}] Iteration {train_it} loss: {log_loss :.5f} '
-                      f'accuracy: {log_accuracy :.2f}% '
+                      f'accuracy: {log_accuracy :.2f} +- {log_accuracry_ci95 :.2f}% '
                       f'speed: {print_step / (end - start) :.2f} iter/s')
 
                 if not (testing and checkpoint):
@@ -228,7 +236,8 @@ class MetaTrainer:
                     self.writer.add_scalar(f'Accuracies/{phase}_accuracy', log_accuracy, train_it)
                 else:
                     best_ckpt_msg = "(best ckpt)" if checkpoint == "best_checkpoint" else ""
-                    self.writer.add_text("Report", f"[TEST] Iter {train_it} Accuracy: {log_accuracy :.2f}% "
+                    self.writer.add_text("Report", f"[TEST] Iter {train_it} Accuracy: {log_accuracy :.2f} "
+                                                   f"+- {log_accuracry_ci95 :.2f}% "
                                                    f"{best_ckpt_msg}", train_it)
 
                 # Save combined logs
@@ -247,6 +256,8 @@ class MetaTrainer:
 
                 running_loss = 0.0
                 running_accuracy = 0.0
+                losses = []
+                accuracies = []
 
                 start = time()
 
