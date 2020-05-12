@@ -2,6 +2,8 @@ import torch
 import higher
 import torchmeta
 
+import os
+
 from torchmeta.datasets.helpers import miniimagenet
 from torchmeta.utils.data import BatchMetaDataLoader
 
@@ -35,6 +37,9 @@ def start_experiment():
 
 
 def main():
+    # Set working directory to parent directory
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
     print(torch.cuda.is_available())
     print(torchmeta.__version__)
 

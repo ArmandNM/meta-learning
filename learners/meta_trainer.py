@@ -2,6 +2,7 @@ import torch
 import argparse
 import os
 import random
+import numpy as np
 
 from learners.maml import MAML
 from learners.cavia import CAVIA
@@ -249,9 +250,8 @@ class MetaTrainer:
                 # }, train_it)
 
                 # Save best model based on val accuracy
-                if validation and (self.best_score is None or
-                                   100 * running_accuracy / (self.args.tasks_num * print_step) > self.best_score):
-                    self.best_score = 100 * running_accuracy / (self.args.tasks_num * print_step)
+                if validation and (self.best_score is None or log_accuracy > self.best_score):
+                    self.best_score = log_accuracy
                     self.save_checkpoint(it=train_iter, checkpoint_name='best_checkpoint')
 
                 running_loss = 0.0
