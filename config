@@ -19,3 +19,5 @@
 --inner_lr=1e-2
 --model=resnet12_narrow128
 --num_filters=32
+
+--prediction_type=proto

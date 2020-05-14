@@ -239,6 +239,9 @@ class MetaConvSupport(torch.nn.Module):
 
         return x
 
+    def predict(self, x_embeddings):
+        return self.fc(x_embeddings)
+
     def aggregate_features(self, intermediate_features):
         # Compute global average pooling
         intermediate_features = F.avg_pool2d(intermediate_features.detach(), intermediate_features.size()[-1])

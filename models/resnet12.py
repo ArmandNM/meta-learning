@@ -13,7 +13,7 @@ def conv1x1(in_planes, out_planes):
 
 
 def norm_layer(planes):
-    return nn.BatchNorm2d(planes)
+    return nn.BatchNorm2d(planes, track_running_stats=False)
 
 
 class Block(nn.Module):
@@ -351,6 +351,7 @@ class ResNet12(nn.Module):
 
         self.out_dim = channels[3]
 
+        self.fc = torch.nn.Linear(self.out_dim, self.n_ways)
         self.temp = torch.nn.Parameter(torch.tensor(10.0))
 
         for m in self.modules():
@@ -378,6 +379,8 @@ class ResNet12(nn.Module):
         x = x.view(x.shape[0], x.shape[1], -1).mean(dim=2)
         return x
 
+    def predict(self, x_embeddings):
+        return self.fc(x_embeddings)
 
 # @register('resnet12')
 def resnet12(n_ways, k_spt):
