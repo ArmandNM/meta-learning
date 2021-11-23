@@ -229,10 +229,10 @@ class MetaConvSupport(torch.nn.Module):
         x = self.block2.forward(x, is_support=is_support)
 
         x = self.block3.forward(x, is_support=is_support)
-        # x = self.attention3.forward(x, proto_spt=self.aggregate_features(self.block3.cached_support_features))
+        x = self.attention3.forward(x, proto_spt=self.aggregate_features(self.block3.cached_support_features))
 
         x = self.block4.forward(x, is_support=is_support)
-        # x = self.attention4.forward(x, proto_spt=self.aggregate_features(self.block4.cached_support_features))
+        x = self.attention4.forward(x, proto_spt=self.aggregate_features(self.block4.cached_support_features))
 
         x = x.reshape(x.size(0), -1)
         # x = self.fc(x)
